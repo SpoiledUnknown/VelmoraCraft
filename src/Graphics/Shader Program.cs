@@ -1,6 +1,6 @@
 ﻿using OpenTK.Graphics.OpenGL4;
 
-namespace Minecraft.src.Graphics
+namespace VoxelRenderEngine.src.Graphics
 {
     internal class ShaderProgram
     {

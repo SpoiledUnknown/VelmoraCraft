@@ -6,7 +6,7 @@ using System.Text;
 using System.Threading.Tasks;
 using StbImageSharp;
 
-namespace Minecraft.src.Graphics
+namespace VoxelRenderEngine.src.Graphics
 {
     internal class Texture
     {

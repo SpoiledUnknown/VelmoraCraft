@@ -1,6 +1,6 @@
 ﻿using OpenTK.Mathematics;
 
-namespace Minecraft.src.World
+namespace VoxelRenderEngine.src.World
 {
     public enum BlockType
     {

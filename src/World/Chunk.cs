@@ -1,9 +1,9 @@
-﻿using Minecraft.src.Graphics;
-using OpenTK.Graphics.OpenGL4;
+﻿using OpenTK.Graphics.OpenGL4;
 using OpenTK.Mathematics;
 using SimplexNoise;
+using VoxelRenderEngine.src.Graphics;
 
-namespace Minecraft.src.World
+namespace VoxelRenderEngine.src.World
 {
     internal class Chunk
     {
@@ -11,7 +11,7 @@ namespace Minecraft.src.World
         private List<Vector2> chunkUVs;
         private List<uint> chunkIndices;
 
-        const int SIZE = 64;
+        const int SIZE = 32;
         const int HEIGHT = 32;
 
         private Vector3 position;

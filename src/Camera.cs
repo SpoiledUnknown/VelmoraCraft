@@ -2,7 +2,7 @@
 using OpenTK.Windowing.Common;
 using OpenTK.Windowing.GraphicsLibraryFramework;
 
-namespace Minecraft.src
+namespace VoxelRenderEngine.src
 {
     internal class Camera
     {

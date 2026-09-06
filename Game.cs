@@ -1,13 +1,13 @@
-﻿using Minecraft.src;
-using Minecraft.src.Graphics;
-using Minecraft.src.World;
-using OpenTK.Graphics.OpenGL4;
+﻿using OpenTK.Graphics.OpenGL4;
 using OpenTK.Mathematics;
 using OpenTK.Windowing.Common;
 using OpenTK.Windowing.Desktop;
 using OpenTK.Windowing.GraphicsLibraryFramework;
+using VoxelRenderEngine.src;
+using VoxelRenderEngine.src.Graphics;
+using VoxelRenderEngine.src.World;
 
-namespace Minecraft
+namespace VoxelRenderEngine
 {
     internal class Game : GameWindow
     {

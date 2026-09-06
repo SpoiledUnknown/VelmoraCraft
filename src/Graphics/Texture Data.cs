@@ -1,7 +1,7 @@
-﻿using Minecraft.src.World;
-using OpenTK.Mathematics;
+﻿using OpenTK.Mathematics;
+using VoxelRenderEngine.src.World;
 
-namespace Minecraft.src.Graphics
+namespace VoxelRenderEngine.src.Graphics
 {
     internal class TextureData
     {

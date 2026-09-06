@@ -1,7 +1,7 @@
 ﻿using OpenTK.Graphics.OpenGL4;
 using OpenTK.Mathematics;
 
-namespace Minecraft.src.Graphics
+namespace VoxelRenderEngine.src.Graphics
 {
     internal class VertexBufferObject
     {

@@ -1,7 +1,7 @@
-﻿using Minecraft.src.Graphics;
-using OpenTK.Mathematics;
+﻿using OpenTK.Mathematics;
+using VoxelRenderEngine.src.Graphics;
 
-namespace Minecraft.src.World
+namespace VoxelRenderEngine.src.World
 {
     internal class Block
     {

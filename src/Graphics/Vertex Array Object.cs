@@ -5,7 +5,7 @@ using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 
-namespace Minecraft.src.Graphics
+namespace VoxelRenderEngine.src.Graphics
 {
     internal class VertexArrayObject
     {
