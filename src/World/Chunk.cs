@@ -1,248 +1,131 @@
-﻿using OpenTK.Graphics.OpenGL4;
 using OpenTK.Mathematics;
-using SimplexNoise;
 using VoxelRenderEngine.src.Graphics;
 
 namespace VoxelRenderEngine.src.World
 {
-    internal class Chunk
+    public class Chunk
     {
-        private List<Vector3> chunkVerts;
-        private List<Vector2> chunkUVs;
-        private List<uint> chunkIndices;
+        public const int SIZE_X = 16;
+        public const int SIZE_Y = 128;
+        public const int SIZE_Z = 16;
 
-        const int SIZE = 32;
-        const int HEIGHT = 32;
+        public Vector2i ChunkCoord { get; }
+        public Vector3 Position { get; }
 
-        private Vector3 position;
-        private uint indexCount;
+        // Flat array indexed as: x + (z * SIZE_X) + (y * SIZE_X * SIZE_Z)
+        // 16 * 128 * 16 bytes = 32,768 bytes (32 KB per chunk)
+        public byte[] Blocks { get; } = new byte[SIZE_X * SIZE_Y * SIZE_Z];
+
+        public bool IsMeshDirty { get; set; } = true;
+        public bool IsGeneratingMesh { get; set; } = false;
+        public bool IsTerrainGenerated { get; set; } = false;
+        public bool IsDecorated { get; set; } = false;
+        public bool HasMesh => indexCount > 0 && chunkVAO != null && ibo != null;
 
         private VertexArrayObject? chunkVAO;
-        private VertexBufferObject? chunkVertexVBO;
-        private VertexBufferObject? chunkUVVBO;
-        private IndexBufferObject? chunkIBO;
+        private VertexBufferObject? vertexVBO;
+        private VertexBufferObject? uvVBO;
+        private VertexBufferObject? colorVBO;
+        private VertexBufferObject? normalVBO;
+        private IndexBufferObject? ibo;
+        private int indexCount = 0;
 
-        private Texture? texture;
-        Block[,,] chunkBLocks = new Block[SIZE, HEIGHT, SIZE];
-
-        public Chunk(Vector3 position)
+        public Chunk(Vector2i coord)
         {
-            this.position = position;
-            Random random = new Random();
-            Noise.Seed = random.Next(0, 100000);
-
-            chunkVerts = new List<Vector3>();
-            chunkUVs = new List<Vector2>();
-            chunkIndices = new List<uint>();
-
-            float[,] heightMap = GenChunk();
-            GenBLock(heightMap);
-            GenFaces(heightMap);
-            BuildChunk();
+            ChunkCoord = coord;
+            Position = new Vector3(coord.X * SIZE_X, 0, coord.Y * SIZE_Z);
         }
 
-        public float[,] GenChunk()
+        [System.Runtime.CompilerServices.MethodImpl(System.Runtime.CompilerServices.MethodImplOptions.AggressiveInlining)]
+        public static int GetBlockIndex(int x, int y, int z)
         {
-            float[,] heightMap = new float[SIZE, SIZE];
+            return x + (z * SIZE_X) + (y * SIZE_X * SIZE_Z);
+        }
 
-            for (int x = 0; x < SIZE; x++)
+        [System.Runtime.CompilerServices.MethodImpl(System.Runtime.CompilerServices.MethodImplOptions.AggressiveInlining)]
+        public byte GetBlock(int x, int y, int z)
+        {
+            if (x < 0 || x >= SIZE_X || y < 0 || y >= SIZE_Y || z < 0 || z >= SIZE_Z)
             {
-                for (int z = 0; z < SIZE; z++)
-                {
-                    heightMap[x, z] = Noise.CalcPixel2D(x, z, 0.01f);
-                }
+                return (byte)BlockType.Empty;
             }
 
-            return heightMap;
+            return Blocks[GetBlockIndex(x, y, z)];
         }
-        public void GenBLock(float[,] heightMap)
+
+        [System.Runtime.CompilerServices.MethodImpl(System.Runtime.CompilerServices.MethodImplOptions.AggressiveInlining)]
+        public void SetBlock(int x, int y, int z, BlockType type)
         {
-            for (int x = 0; x < SIZE; x++)
+            if (x >= 0 && x < SIZE_X && y >= 0 && y < SIZE_Y && z >= 0 && z < SIZE_Z)
             {
-                for (int z = 0; z < SIZE; z++)
-                {
-
-                    int columnHeight = (int)(heightMap[x, z] / 10);
-                    for (int y = 0; y < HEIGHT; y++)
-                    {
-                        BlockType type = BlockType.Empty;
-                        if (y < columnHeight - 1)
-                        {
-                            type = BlockType.Dirt;
-                        }
-                        else if (y == columnHeight - 1)
-                        {
-                            type = BlockType.Grass;
-                        }
-
-                        chunkBLocks[x, y, z] = new Block(new Vector3(x, y, z), type);
-                    }
-                }
+                Blocks[GetBlockIndex(x, y, z)] = (byte)type;
+                IsMeshDirty = true;
             }
         }
 
-        public void GenFaces(float[,] heightMap)
+        // Upload mesh geometry to OpenGL GPU buffers (called on main thread)
+        public void UploadMesh(ChunkMesh mesh)
         {
-            for (int x = 0; x < SIZE; x++)
-            {
-                for (int z = 0; z < SIZE; z++)
-                {
-                    for (int y = 0; y < HEIGHT; y++)
-                    {
-                        int numFaces = 0;
+            // Clean up old GPU buffers if they exist
+            DeleteGLBuffers();
 
-                        if (chunkBLocks[x, y, z].type == BlockType.Empty) continue;
+            indexCount = mesh.Indices.Length;
+            if (indexCount == 0) return;
 
-                        //Left Faces
-                        if (x > 0)
-                        {
-                            if (chunkBLocks[x - 1, y, z].type == BlockType.Empty)
-                            {
-                                IntegrateFace(chunkBLocks[x, y, z], Faces.Left);
-                                numFaces++;
-                            }
-                        }
-                        else
-                        {
-                            IntegrateFace(chunkBLocks[x, y, z], Faces.Left);
-                            numFaces++;
-                        }
-
-                        //Right Faces
-                        if (x < (SIZE - 1))
-                        {
-                            if (chunkBLocks[x + 1, y, z].type == BlockType.Empty)
-                            {
-                                IntegrateFace(chunkBLocks[x, y, z], Faces.Right);
-                                numFaces++;
-                            }
-                        }
-                        else
-                        {
-                            IntegrateFace(chunkBLocks[x, y, z], Faces.Right);
-                            numFaces++;
-                        }
-
-                        //Top Faces
-                        if (y < (HEIGHT - 1))
-                        {
-                            if (chunkBLocks[x, y + 1, z].type == BlockType.Empty)
-                            {
-                                IntegrateFace(chunkBLocks[x, y, z], Faces.Top);
-                                numFaces++;
-                            }
-                        }
-                        else
-                        {
-                            IntegrateFace(chunkBLocks[x, y, z], Faces.Top);
-                            numFaces++;
-                        }
-
-                        //Bottom Faces
-                        if (y > 0)
-                        {
-                            if (chunkBLocks[x, y - 1, z].type == BlockType.Empty)
-                            {
-                                IntegrateFace(chunkBLocks[x, y, z], Faces.Bottom);
-                                numFaces++;
-                            }
-                        }
-                        else
-                        {
-                            IntegrateFace(chunkBLocks[x, y, z], Faces.Bottom);
-                            numFaces++;
-                        }
-
-                        //Front Faces
-                        if (z < (SIZE - 1))
-                        {
-                            if (chunkBLocks[x, y, z + 1].type == BlockType.Empty)
-                            {
-                                IntegrateFace(chunkBLocks[x, y, z], Faces.Front);
-                                numFaces++;
-                            }
-                        }
-                        else
-                        {
-                            IntegrateFace(chunkBLocks[x, y, z], Faces.Front);
-                            numFaces++;
-                        }
-
-                        //Back Faces
-                        if (z > 0)
-                        {
-                            if (chunkBLocks[x, y, z - 1].type == BlockType.Empty)
-                            {
-                                IntegrateFace(chunkBLocks[x, y, z], Faces.Back);
-                                numFaces++;
-                            }
-                        }
-                        else
-                        {
-                            IntegrateFace(chunkBLocks[x, y, z], Faces.Back);
-                            numFaces++;
-                        }
-
-                        AddIndices(numFaces);
-                    }
-                }
-            }
-        }
-
-        private void IntegrateFace(Block block, Faces face)
-        {
-            var faceData = block.GetFace(face);
-            chunkVerts.AddRange(faceData.vertices);
-            chunkUVs.AddRange(faceData.uv);
-        }
-
-        private void AddIndices(int amount)
-        {
-            for (int i = 0; i < amount; i++)
-            {
-                chunkIndices.Add(0 + indexCount);
-                chunkIndices.Add(1 + indexCount);
-                chunkIndices.Add(2 + indexCount);
-                chunkIndices.Add(2 + indexCount);
-                chunkIndices.Add(3 + indexCount);
-                chunkIndices.Add(0 + indexCount);
-
-                indexCount += 4;
-            }
-        }
-        private void BuildChunk()
-        {
             chunkVAO = new VertexArrayObject();
             chunkVAO.Bind();
 
-            chunkVertexVBO = new VertexBufferObject(chunkVerts);
-            chunkVertexVBO.Bind();
-            chunkVAO.LinkToVAO(0, 3, chunkVertexVBO);
+            vertexVBO = new VertexBufferObject(mesh.Vertices.AsSpan());
+            vertexVBO.Bind();
+            chunkVAO.LinkToVAO(0, 3, vertexVBO);
 
-            chunkUVVBO = new VertexBufferObject(chunkUVs);
-            chunkUVVBO.Bind();
-            chunkVAO.LinkToVAO(1, 2, chunkUVVBO);
+            uvVBO = new VertexBufferObject(mesh.UVs.AsSpan());
+            uvVBO.Bind();
+            chunkVAO.LinkToVAO(1, 2, uvVBO);
 
-            chunkIBO = new IndexBufferObject(chunkIndices);
+            colorVBO = new VertexBufferObject(mesh.Colors.AsSpan());
+            colorVBO.Bind();
+            chunkVAO.LinkToVAO(2, 3, colorVBO);
 
-            texture = new Texture("atlas.png");
+            normalVBO = new VertexBufferObject(mesh.Normals.AsSpan());
+            normalVBO.Bind();
+            chunkVAO.LinkToVAO(3, 3, normalVBO);
+
+            ibo = new IndexBufferObject(mesh.Indices.AsSpan());
+
+            IsMeshDirty = false;
         }
-        public void Render(ShaderProgram shaderProgram)
-        {
-            shaderProgram.Bind();
-            chunkVAO!.Bind();
-            chunkIBO!.Bind();
-            texture!.Bind();
 
-            GL.DrawElements(PrimitiveType.Triangles, chunkIndices.Count, DrawElementsType.UnsignedInt, 0);
+        public void Render()
+        {
+            if (indexCount == 0 || chunkVAO == null || ibo == null) return;
+
+            chunkVAO.Bind();
+            ibo.Bind();
+            OpenTK.Graphics.OpenGL.GL.DrawElements(
+                OpenTK.Graphics.OpenGL.PrimitiveType.Triangles,
+                indexCount,
+                OpenTK.Graphics.OpenGL.DrawElementsType.UnsignedInt,
+                0
+            );
         }
 
-        public void Delete()
+        public void DeleteGLBuffers()
         {
-            chunkVAO!.Delete();
-            texture!.Delete();
-            chunkUVVBO!.Delete();
-            chunkIBO!.Delete();
+            chunkVAO?.Delete();
+            vertexVBO?.Delete();
+            uvVBO?.Delete();
+            colorVBO?.Delete();
+            normalVBO?.Delete();
+            ibo?.Delete();
+
+            chunkVAO = null;
+            vertexVBO = null;
+            uvVBO = null;
+            colorVBO = null;
+            normalVBO = null;
+            ibo = null;
+            indexCount = 0;
         }
     }
 }

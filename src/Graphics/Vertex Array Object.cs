@@ -1,4 +1,4 @@
-﻿using OpenTK.Graphics.OpenGL4;
+using OpenTK.Graphics.OpenGL;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -20,8 +20,8 @@ namespace VoxelRenderEngine.src.Graphics
         {
             Bind();
             vertexBufferObject.Bind();
-            GL.VertexAttribPointer(location, size, VertexAttribPointerType.Float, false, 0, 0);
-            GL.EnableVertexAttribArray(location);
+            GL.VertexAttribPointer((uint)location, size, VertexAttribPointerType.Float, false, 0, IntPtr.Zero);
+            GL.EnableVertexAttribArray((uint)location);
             vertexBufferObject.UnBind();
             UnBind();
         }

@@ -1,8 +1,8 @@
-﻿using OpenTK.Graphics.OpenGL4;
+using OpenTK.Graphics.OpenGL;
 
 namespace VoxelRenderEngine.src.Graphics
 {
-    internal class ShaderProgram
+    public class ShaderProgram
     {
         public int ID;
         public ShaderProgram(string vertexShaderFilepath, string fragmentShaderFilepath)
@@ -37,8 +37,17 @@ namespace VoxelRenderEngine.src.Graphics
 
             try
             {
-                StreamReader reader = new StreamReader("../../../Shaders/" + filePath);
-                Console.WriteLine();
+                string fullPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "Shaders", filePath);
+                if (!File.Exists(fullPath))
+                {
+                    fullPath = Path.Combine(Directory.GetCurrentDirectory(), "Shaders", filePath);
+                }
+                if (!File.Exists(fullPath))
+                {
+                    fullPath = Path.Combine("../../../Shaders", filePath);
+                }
+
+                using StreamReader reader = new StreamReader(fullPath);
                 shaderSource = reader.ReadToEnd();
             }
             catch (Exception ex)

@@ -1,115 +1,69 @@
-﻿using OpenTK.Mathematics;
-using OpenTK.Windowing.Common;
-using OpenTK.Windowing.GraphicsLibraryFramework;
+using OpenTK.Mathematics;
 
 namespace VoxelRenderEngine.src
 {
-    internal class Camera
+    public class Camera
     {
-        private float speed = 8f;
-        private float screenWidth;
-        private float screenHeight;
-        private float sensitivity = 10f;
+        private float fov = 60.0f;
+        private float aspectRatio;
+        private float nearPlane = 0.1f;
+        private float farPlane = 300.0f;
 
-        private Vector3 position;
+        public Vector3 Position { get; set; }
+        public float Pitch { get; set; } = 0.0f;
+        public float Yaw { get; set; } = -90.0f;
 
-        private Vector3 up = Vector3.UnitY;
-        private Vector3 forward = -Vector3.UnitZ;
-        private Vector3 right = Vector3.UnitX;
-
-        // --- View Rotations ---
-        private float pitch;
-        private float yaw = -90f;
-
-        private bool firstMove = true;
-        private Vector2 lastPos;
+        public Vector3 Forward { get; private set; } = -Vector3.UnitZ;
+        public Vector3 Right { get; private set; } = Vector3.UnitX;
+        public Vector3 Up { get; private set; } = Vector3.UnitY;
 
         public Camera(float width, float height, Vector3 position)
         {
-            screenWidth = width;
-            screenHeight = height;
-            this.position = position;
+            aspectRatio = width / Math.Max(1.0f, height);
+            Position = position;
+            UpdateVectors();
         }
 
-        public Matrix4 getViewMatrix()
+        public void UpdateAspectRatio(float width, float height)
         {
-            return Matrix4.LookAt(position, position + forward, up);
+            aspectRatio = width / Math.Max(1.0f, height);
+        }
+
+        public Matrix4 GetViewMatrix()
+        {
+            return Matrix4.LookAt(Position, Position + Forward, Up);
         }
 
         public Matrix4 GetProjectionMatrix()
         {
-            return Matrix4.CreatePerspectiveFieldOfView(MathHelper.DegreesToRadians(45.0f), screenWidth/screenHeight, 0.1f, 100f);
+            return Matrix4.CreatePerspectiveFieldOfView(
+                MathHelper.DegreesToRadians(fov),
+                aspectRatio,
+                nearPlane,
+                farPlane
+            );
         }
 
-        private void UpdateVectors()
+        public void Rotate(float deltaYaw, float deltaPitch)
         {
-            if (pitch > 89f)
-            {
-                pitch = 89f;
-            }
-            else if (pitch < -89f)
-            {
-                pitch = -89f;
-            }
-                forward.X = MathF.Cos(MathHelper.DegreesToRadians(pitch)) * MathF.Cos(MathHelper.DegreesToRadians(yaw));
-            forward.Y = MathF.Sin(MathHelper.DegreesToRadians(pitch));
-            forward.Z = MathF.Cos(MathHelper.DegreesToRadians(pitch)) * MathF.Sin(MathHelper.DegreesToRadians(yaw));
-
-            forward = Vector3.Normalize(forward);
-
-            right = Vector3.Normalize(Vector3.Cross(forward, Vector3.UnitY));
-            up = Vector3.Normalize(Vector3.Cross(right, forward));
-        }
-
-        private void InputController(KeyboardState input, MouseState mouse, FrameEventArgs e)
-        {
-            if (input.IsKeyDown(Keys.W))
-            {
-                position += forward * speed * (float)e.Time;
-            }
-            if (input.IsKeyDown(Keys.A))
-            {
-                position -= right * speed * (float)e.Time;
-            }
-            if (input.IsKeyDown(Keys.S))
-            {
-                position -= forward * speed * (float)e.Time;
-            }
-            if (input.IsKeyDown(Keys.D))
-            {
-                position += right * speed * (float)e.Time;
-            }
-
-            if (input.IsKeyDown(Keys.Space))
-            {
-                position.Y += speed * (float)e.Time;
-            }
-            if (input.IsKeyDown(Keys.LeftShift))
-            {
-                position.Y -= speed * (float)e.Time;
-            }
-
-            if (firstMove)
-            {
-                lastPos = new Vector2(mouse.X, mouse.Y);
-                firstMove = false;
-            }
-            else
-            {
-                var deltaX = mouse.X - lastPos.X;
-                var deltaY = mouse.Y - lastPos.Y;
-                lastPos = new Vector2(mouse.X, mouse.Y);
-
-                yaw += deltaX * sensitivity * (float)e.Time;
-                pitch -= deltaY * sensitivity * (float)e.Time;
-            }
-
+            Yaw += deltaYaw;
+            Pitch = Math.Clamp(Pitch + deltaPitch, -89.0f, 89.0f);
             UpdateVectors();
         }
 
-        public void Update(KeyboardState input, MouseState mouse, FrameEventArgs e)
+        public void UpdateVectors()
         {
-            InputController(input, mouse, e);
+            float pitchRad = MathHelper.DegreesToRadians(Pitch);
+            float yawRad = MathHelper.DegreesToRadians(Yaw);
+
+            Vector3 newForward;
+            newForward.X = MathF.Cos(pitchRad) * MathF.Cos(yawRad);
+            newForward.Y = MathF.Sin(pitchRad);
+            newForward.Z = MathF.Cos(pitchRad) * MathF.Sin(yawRad);
+
+            Forward = Vector3.Normalize(newForward);
+            Right = Vector3.Normalize(Vector3.Cross(Forward, Vector3.UnitY));
+            Up = Vector3.Normalize(Vector3.Cross(Right, Forward));
         }
     }
 }

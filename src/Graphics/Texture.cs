@@ -1,4 +1,4 @@
-﻿using OpenTK.Graphics.OpenGL4;
+using OpenTK.Graphics.OpenGL;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -8,9 +8,10 @@ using StbImageSharp;
 
 namespace VoxelRenderEngine.src.Graphics
 {
-    internal class Texture
+    public class Texture
     {
         private int ID;
+        public int Handle => ID;
 
         public Texture(string filePath)
         {
@@ -18,15 +19,25 @@ namespace VoxelRenderEngine.src.Graphics
             GL.ActiveTexture(TextureUnit.Texture0);
             Bind();
 
-            GL.TexParameter(TextureTarget.Texture2D, TextureParameterName.TextureWrapS, (int)TextureWrapMode.Repeat);
-            GL.TexParameter(TextureTarget.Texture2D, TextureParameterName.TextureWrapT, (int)TextureWrapMode.Repeat);
-            GL.TexParameter(TextureTarget.Texture2D, TextureParameterName.TextureMinFilter, (int)TextureMinFilter.Nearest);
-            GL.TexParameter(TextureTarget.Texture2D, TextureParameterName.TextureMagFilter, (int)TextureMagFilter.Nearest);
+            GL.TexParameteri(TextureTarget.Texture2D, TextureParameterName.TextureWrapS, (int)TextureWrapMode.Repeat);
+            GL.TexParameteri(TextureTarget.Texture2D, TextureParameterName.TextureWrapT, (int)TextureWrapMode.Repeat);
+            GL.TexParameteri(TextureTarget.Texture2D, TextureParameterName.TextureMinFilter, (int)TextureMinFilter.Nearest);
+            GL.TexParameteri(TextureTarget.Texture2D, TextureParameterName.TextureMagFilter, (int)TextureMagFilter.Nearest);
 
             StbImage.stbi_set_flip_vertically_on_load(1);
-            ImageResult dirtTexture = ImageResult.FromStream(File.OpenRead("../../../Textures/" + filePath), ColorComponents.RedGreenBlueAlpha);
+            string fullPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "Textures", filePath);
+            if (!File.Exists(fullPath))
+            {
+                fullPath = Path.Combine(Directory.GetCurrentDirectory(), "Textures", filePath);
+            }
+            if (!File.Exists(fullPath))
+            {
+                fullPath = Path.Combine("../../../Textures", filePath);
+            }
 
-            GL.TexImage2D(TextureTarget.Texture2D, 0, PixelInternalFormat.Rgba, dirtTexture.Width, dirtTexture.Height, 0, PixelFormat.Rgba, PixelType.UnsignedByte, dirtTexture.Data);
+            ImageResult dirtTexture = ImageResult.FromStream(File.OpenRead(fullPath), ColorComponents.RedGreenBlueAlpha);
+
+            GL.TexImage2D(TextureTarget.Texture2D, 0, InternalFormat.Rgba, dirtTexture.Width, dirtTexture.Height, 0, PixelFormat.Rgba, PixelType.UnsignedByte, dirtTexture.Data);
             UnBind();
         }
 
