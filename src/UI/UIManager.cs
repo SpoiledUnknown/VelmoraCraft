@@ -45,12 +45,10 @@ namespace VoxelRenderEngine.src.UI
         private Vector3i? currentChestPos;
         private Vector3i? currentFurnacePos;
 
-        // Render Distance Slider & Anti-Aliasing settings
+        // Render Distance Slider settings
         private int renderDistanceChunks = 8;
         private bool isDraggingRenderDistanceSlider = false;
         public int RenderDistanceChunks => renderDistanceChunks;
-        public bool IsAntiAliasingEnabled { get; set; } = false;
-        public Action<bool>? OnAntiAliasingToggled { get; set; }
 
         // Held item for drag & drop
         public ItemStack HeldItem = ItemStack.Empty;
@@ -295,17 +293,8 @@ namespace VoxelRenderEngine.src.UI
                 return;
             }
 
-            // 5. Anti-Aliasing (Toggle)
-            float btn5Y = btn4Y + btnH + btnSpacing;
-            if (leftClicked && mx >= btnX && mx <= btnX + btnW && my >= btn5Y && my <= btn5Y + btnH)
-            {
-                IsAntiAliasingEnabled = !IsAntiAliasingEnabled;
-                OnAntiAliasingToggled?.Invoke(IsAntiAliasingEnabled);
-                return;
-            }
-
-            // 6. Render Distance Slider (2 to 16 chunks)
-            float sliderY = btn5Y + btnH + btnSpacing + 2f;
+            // 5. Render Distance Slider (2 to 16 chunks)
+            float sliderY = btn4Y + btnH + btnSpacing + 2f;
             float trackX = btnX;
             float trackY = sliderY + 18f;
             float trackW = btnW;
@@ -1228,7 +1217,7 @@ namespace VoxelRenderEngine.src.UI
             renderer.DrawQuad(0, 0, screenW, screenH, new Vector4(0.02f, 0.02f, 0.04f, 0.70f));
 
             float panelWidth = 320f;
-            float panelHeight = 400f;
+            float panelHeight = 350f;
             float startX = (screenW - panelWidth) * 0.5f;
             float startY = (screenH - panelHeight) * 0.5f;
 
@@ -1278,13 +1267,8 @@ namespace VoxelRenderEngine.src.UI
             string flyText = (player?.IsFlying ?? false) ? "FLIGHT: ENABLED" : "FLIGHT: DISABLED";
             RenderMenuButton(flyText, btnX, btn4Y, btnW, btnH, mousePos);
 
-            // Button 5: Anti-Aliasing (Toggle)
-            float btn5Y = btn4Y + btnH + btnSpacing;
-            string aaText = IsAntiAliasingEnabled ? "ANTI-ALIASING: ON" : "ANTI-ALIASING: OFF";
-            RenderMenuButton(aaText, btnX, btn5Y, btnW, btnH, mousePos);
-
-            // Section 6: Render Distance Slider (2 to 16 chunks)
-            float sliderY = btn5Y + btnH + btnSpacing + 2f;
+            // Section 5: Render Distance Slider (2 to 16 chunks)
+            float sliderY = btn4Y + btnH + btnSpacing + 2f;
             int curDist = world?.ViewDistanceChunks ?? renderDistanceChunks;
             string distText = $"RENDER DISTANCE: {curDist} CHUNKS";
             Vector2 distSz = renderer.MeasureText(distText, 0.90f);
@@ -1317,7 +1301,7 @@ namespace VoxelRenderEngine.src.UI
             Vector4 knobBorder = isKnobHovered ? new Vector4(0.30f, 0.80f, 1.0f, 1.0f) : new Vector4(0.35f, 0.45f, 0.60f, 0.9f);
             renderer.DrawPanel(knobX, knobY, knobW, knobH, knobBg, knobBorder, 1.5f);
 
-            // Button 7: Quit to Desktop
+            // Button 6: Quit to Desktop
             float btn6Y = sliderY + 42f;
             RenderMenuButton("QUIT TO DESKTOP", btnX, btn6Y, btnW, btnH, mousePos, isDestructive: true);
         }
