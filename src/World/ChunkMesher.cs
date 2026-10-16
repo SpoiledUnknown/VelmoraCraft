@@ -3,22 +3,76 @@ using VoxelRenderEngine.src.Graphics;
 
 namespace VoxelRenderEngine.src.World
 {
+    public class ChunkMeshBuilder
+    {
+        public readonly List<ChunkVertex> Vertices = new List<ChunkVertex>(8192);
+        public readonly List<uint> Indices = new List<uint>(12288);
+        public uint VertexOffset = 0;
+
+        [System.Runtime.CompilerServices.MethodImpl(System.Runtime.CompilerServices.MethodImplOptions.AggressiveInlining)]
+        public void AddQuad(
+            Vector3 p0, Vector3 p1, Vector3 p2, Vector3 p3,
+            float u0, float v0, float u1, float v1,
+            Vector3 tint, Vector3 normal)
+        {
+            uint b = VertexOffset;
+
+            Vertices.Add(new ChunkVertex(p0.X, p0.Y, p0.Z, u0, v1, tint.X, tint.Y, tint.Z, normal.X, normal.Y, normal.Z));
+            Vertices.Add(new ChunkVertex(p1.X, p1.Y, p1.Z, u1, v1, tint.X, tint.Y, tint.Z, normal.X, normal.Y, normal.Z));
+            Vertices.Add(new ChunkVertex(p2.X, p2.Y, p2.Z, u1, v0, tint.X, tint.Y, tint.Z, normal.X, normal.Y, normal.Z));
+            Vertices.Add(new ChunkVertex(p3.X, p3.Y, p3.Z, u0, v0, tint.X, tint.Y, tint.Z, normal.X, normal.Y, normal.Z));
+
+            Indices.Add(b + 0);
+            Indices.Add(b + 1);
+            Indices.Add(b + 2);
+            Indices.Add(b + 2);
+            Indices.Add(b + 3);
+            Indices.Add(b + 0);
+
+            VertexOffset += 4;
+        }
+
+        public void Clear()
+        {
+            Vertices.Clear();
+            Indices.Clear();
+            VertexOffset = 0;
+        }
+
+        public ChunkMesh Build(int opaqueIndexCount, int waterIndexCount)
+        {
+            int vCount = Vertices.Count;
+            int iCount = Indices.Count;
+
+            if (iCount == 0)
+            {
+                return new ChunkMesh(Array.Empty<ChunkVertex>(), 0, Array.Empty<uint>(), 0, 0, 0, false);
+            }
+
+            var rentedVertices = System.Buffers.ArrayPool<ChunkVertex>.Shared.Rent(vCount);
+            var rentedIndices = System.Buffers.ArrayPool<uint>.Shared.Rent(iCount);
+
+            System.Runtime.InteropServices.CollectionsMarshal.AsSpan(Vertices).CopyTo(rentedVertices.AsSpan(0, vCount));
+            System.Runtime.InteropServices.CollectionsMarshal.AsSpan(Indices).CopyTo(rentedIndices.AsSpan(0, iCount));
+
+            return new ChunkMesh(rentedVertices, vCount, rentedIndices, iCount, opaqueIndexCount, waterIndexCount, true);
+        }
+    }
+
     public static class ChunkMesher
     {
         private const float ATLAS_SIZE = 16f;
+        private static readonly ThreadLocal<ChunkMeshBuilder> threadLocalBuilder = new ThreadLocal<ChunkMeshBuilder>(() => new ChunkMeshBuilder());
 
         public static ChunkMesh BuildMesh(Chunk chunk, Chunk? leftChunk, Chunk? rightChunk, Chunk? frontChunk, Chunk? backChunk)
         {
-            var vertices = new List<Vector3>(4096);
-            var uvs = new List<Vector2>(4096);
-            var colors = new List<Vector3>(4096);
-            var normals = new List<Vector3>(4096);
-            var indices = new List<uint>(6144);
-            uint vertexOffset = 0;
+            var builder = threadLocalBuilder.Value!;
+            builder.Clear();
 
             float chunkWorldX = chunk.Position.X;
             float chunkWorldZ = chunk.Position.Z;
 
+            // PASS 1: Opaque blocks (all solid blocks, terrain, seabed, etc.)
             for (int x = 0; x < Chunk.SIZE_X; x++)
             {
                 for (int y = 0; y < Chunk.SIZE_Y; y++)
@@ -27,81 +81,118 @@ namespace VoxelRenderEngine.src.World
                     {
                         byte blockId = chunk.GetBlock(x, y, z);
                         if (blockId == (byte)BlockType.Empty) continue;
+                        if (blockId == (byte)BlockType.Water || blockId == (byte)BlockType.Portal) continue;
 
-                        var blockDef = BlockRegistry.Get(blockId);
-                        float bx = chunkWorldX + x;
-                        float by = y;
-                        float bz = chunkWorldZ + z;
-
-                        if (blockDef.MeshType == MeshType.StandardCube)
-                        {
-                            // 1. Front (+Z)
-                            if (ShouldRenderFace(chunk, frontChunk, x, y, z + 1, 0, 1, blockId))
-                            {
-                                AddFace(Face.Front, bx, by, bz, blockDef, vertices, uvs, colors, normals, indices, ref vertexOffset);
-                            }
-
-                            // 2. Back (-Z)
-                            if (ShouldRenderFace(chunk, backChunk, x, y, z - 1, 0, -1, blockId))
-                            {
-                                AddFace(Face.Back, bx, by, bz, blockDef, vertices, uvs, colors, normals, indices, ref vertexOffset);
-                            }
-
-                            // 3. Left (-X)
-                            if (ShouldRenderFace(chunk, leftChunk, x - 1, y, z, -1, 0, blockId))
-                            {
-                                AddFace(Face.Left, bx, by, bz, blockDef, vertices, uvs, colors, normals, indices, ref vertexOffset);
-                            }
-
-                            // 4. Right (+X)
-                            if (ShouldRenderFace(chunk, rightChunk, x + 1, y, z, 1, 0, blockId))
-                            {
-                                AddFace(Face.Right, bx, by, bz, blockDef, vertices, uvs, colors, normals, indices, ref vertexOffset);
-                            }
-
-                            // 5. Top (+Y)
-                            byte topBlock = y + 1 < Chunk.SIZE_Y ? chunk.GetBlock(x, y + 1, z) : (byte)BlockType.Empty;
-                            if ((y + 1 >= Chunk.SIZE_Y || BlockRegistry.IsTransparent(topBlock)) && !(topBlock == blockId && (blockId == (byte)BlockType.Water || blockId == (byte)BlockType.Lava)))
-                            {
-                                AddFace(Face.Top, bx, by, bz, blockDef, vertices, uvs, colors, normals, indices, ref vertexOffset);
-                            }
-
-                            // 6. Bottom (-Y)
-                            byte bottomBlock = y - 1 >= 0 ? chunk.GetBlock(x, y - 1, z) : (byte)BlockType.Empty;
-                            if ((y - 1 < 0 || BlockRegistry.IsTransparent(bottomBlock)) && !(bottomBlock == blockId && (blockId == (byte)BlockType.Water || blockId == (byte)BlockType.Lava)))
-                            {
-                                AddFace(Face.Bottom, bx, by, bz, blockDef, vertices, uvs, colors, normals, indices, ref vertexOffset);
-                            }
-                        }
-                        else if (blockDef.MeshType == MeshType.CrossQuad)
-                        {
-                            AddCrossQuad(bx, by, bz, blockDef, vertices, uvs, colors, normals, indices, ref vertexOffset);
-                        }
-                        else if (blockDef.MeshType == MeshType.FlatSurface)
-                        {
-                            AddFlatSurface(bx, by, bz, blockDef, vertices, uvs, colors, normals, indices, ref vertexOffset);
-                        }
-                        else if (blockDef.MeshType == MeshType.DoorClosed)
-                        {
-                            AddDoor(bx, by, bz, blockDef, false, vertices, uvs, colors, normals, indices, ref vertexOffset);
-                        }
-                        else if (blockDef.MeshType == MeshType.DoorOpen)
-                        {
-                            AddDoor(bx, by, bz, blockDef, true, vertices, uvs, colors, normals, indices, ref vertexOffset);
-                        }
-                        else if (blockDef.MeshType == MeshType.SwitchLever)
-                        {
-                            AddLever(bx, by, bz, blockDef, vertices, uvs, colors, normals, indices, ref vertexOffset);
-                        }
-                        else if (blockDef.MeshType == MeshType.WallButton)
-                        {
-                            AddButton(bx, by, bz, blockDef, vertices, uvs, colors, normals, indices, ref vertexOffset);
-                        }
+                        AddBlockMesh(chunk, leftChunk, rightChunk, frontChunk, backChunk, x, y, z, blockId, chunkWorldX, chunkWorldZ, builder);
                     }
                 }
             }
 
-            return new ChunkMesh(vertices.ToArray(), uvs.ToArray(), colors.ToArray(), normals.ToArray(), indices.ToArray());
+            int opaqueIndexCount = builder.Indices.Count;
+
+            // PASS 2: Translucent blocks (Water & Portal)
+            for (int x = 0; x < Chunk.SIZE_X; x++)
+            {
+                for (int y = 0; y < Chunk.SIZE_Y; y++)
+                {
+                    for (int z = 0; z < Chunk.SIZE_Z; z++)
+                    {
+                        byte blockId = chunk.GetBlock(x, y, z);
+                        if (blockId != (byte)BlockType.Water && blockId != (byte)BlockType.Portal) continue;
+
+                        AddBlockMesh(chunk, leftChunk, rightChunk, frontChunk, backChunk, x, y, z, blockId, chunkWorldX, chunkWorldZ, builder);
+                    }
+                }
+            }
+
+            int waterIndexCount = builder.Indices.Count - opaqueIndexCount;
+
+            return builder.Build(opaqueIndexCount, waterIndexCount);
+        }
+
+        private static void AddBlockMesh(
+            Chunk chunk,
+            Chunk? leftChunk,
+            Chunk? rightChunk,
+            Chunk? frontChunk,
+            Chunk? backChunk,
+            int x,
+            int y,
+            int z,
+            byte blockId,
+            float chunkWorldX,
+            float chunkWorldZ,
+            ChunkMeshBuilder builder)
+        {
+            var blockDef = BlockRegistry.Get(blockId);
+            float bx = chunkWorldX + x;
+            float by = y;
+            float bz = chunkWorldZ + z;
+
+            if (blockDef.MeshType == MeshType.StandardCube)
+            {
+                // 1. Front (+Z)
+                if (ShouldRenderFace(chunk, frontChunk, x, y, z + 1, 0, 1, blockId))
+                {
+                    AddFace(Face.Front, bx, by, bz, blockDef, builder);
+                }
+
+                // 2. Back (-Z)
+                if (ShouldRenderFace(chunk, backChunk, x, y, z - 1, 0, -1, blockId))
+                {
+                    AddFace(Face.Back, bx, by, bz, blockDef, builder);
+                }
+
+                // 3. Left (-X)
+                if (ShouldRenderFace(chunk, leftChunk, x - 1, y, z, -1, 0, blockId))
+                {
+                    AddFace(Face.Left, bx, by, bz, blockDef, builder);
+                }
+
+                // 4. Right (+X)
+                if (ShouldRenderFace(chunk, rightChunk, x + 1, y, z, 1, 0, blockId))
+                {
+                    AddFace(Face.Right, bx, by, bz, blockDef, builder);
+                }
+
+                // 5. Top (+Y)
+                byte topBlock = y + 1 < Chunk.SIZE_Y ? chunk.GetBlock(x, y + 1, z) : (byte)BlockType.Empty;
+                if ((y + 1 >= Chunk.SIZE_Y || BlockRegistry.IsTransparent(topBlock)) && !(topBlock == blockId && (blockId == (byte)BlockType.Water || blockId == (byte)BlockType.Lava)))
+                {
+                    AddFace(Face.Top, bx, by, bz, blockDef, builder);
+                }
+
+                // 6. Bottom (-Y)
+                byte bottomBlock = y - 1 >= 0 ? chunk.GetBlock(x, y - 1, z) : (byte)BlockType.Empty;
+                if ((y - 1 < 0 || BlockRegistry.IsTransparent(bottomBlock)) && !(bottomBlock == blockId && (blockId == (byte)BlockType.Water || blockId == (byte)BlockType.Lava)))
+                {
+                    AddFace(Face.Bottom, bx, by, bz, blockDef, builder);
+                }
+            }
+            else if (blockDef.MeshType == MeshType.CrossQuad)
+            {
+                AddCrossQuad(bx, by, bz, blockDef, builder);
+            }
+            else if (blockDef.MeshType == MeshType.FlatSurface)
+            {
+                AddFlatSurface(bx, by, bz, blockDef, builder);
+            }
+            else if (blockDef.MeshType == MeshType.DoorClosed)
+            {
+                AddDoor(bx, by, bz, blockDef, false, builder);
+            }
+            else if (blockDef.MeshType == MeshType.DoorOpen)
+            {
+                AddDoor(bx, by, bz, blockDef, true, builder);
+            }
+            else if (blockDef.MeshType == MeshType.SwitchLever)
+            {
+                AddLever(bx, by, bz, blockDef, builder);
+            }
+            else if (blockDef.MeshType == MeshType.WallButton)
+            {
+                AddButton(bx, by, bz, blockDef, builder);
+            }
         }
 
         private static bool ShouldRenderFace(Chunk current, Chunk? neighborChunk, int targetX, int targetY, int targetZ, int dirX, int dirZ, byte currentBlockId)
@@ -150,19 +241,9 @@ namespace VoxelRenderEngine.src.World
             float y,
             float z,
             BlockDefinition def,
-            List<Vector3> vertices,
-            List<Vector2> uvs,
-            List<Vector3> colors,
-            List<Vector3> normals,
-            List<uint> indices,
-            ref uint vertexOffset)
+            ChunkMeshBuilder builder)
         {
             Vector3 tint = def.TintColor;
-            colors.Add(tint);
-            colors.Add(tint);
-            colors.Add(tint);
-            colors.Add(tint);
-
             Vector3 normal = face switch
             {
                 Face.Front => new Vector3(0, 0, 1),
@@ -173,13 +254,7 @@ namespace VoxelRenderEngine.src.World
                 Face.Bottom => new Vector3(0, -1, 0),
                 _ => Vector3.UnitY
             };
-            normals.Add(normal);
-            normals.Add(normal);
-            normals.Add(normal);
-            normals.Add(normal);
-            // Unit cube centered around block position (e.g. from -0.5 to +0.5 or 0 to 1)
-            // Matching existing engine orientation:
-            // x-0.5f to x+0.5f, y-0.5f to y+0.5f, z-0.5f to z+0.5f
+
             float x0 = x - 0.5f;
             float x1 = x + 0.5f;
             float y0 = y - 0.5f;
@@ -187,77 +262,59 @@ namespace VoxelRenderEngine.src.World
             float z0 = z - 0.5f;
             float z1 = z + 0.5f;
 
+            Vector3 pos0, pos1, pos2, pos3;
             switch (face)
             {
                 case Face.Front: // +Z
-                    vertices.Add(new Vector3(x0, y1, z1));
-                    vertices.Add(new Vector3(x1, y1, z1));
-                    vertices.Add(new Vector3(x1, y0, z1));
-                    vertices.Add(new Vector3(x0, y0, z1));
+                    pos0 = new Vector3(x0, y1, z1);
+                    pos1 = new Vector3(x1, y1, z1);
+                    pos2 = new Vector3(x1, y0, z1);
+                    pos3 = new Vector3(x0, y0, z1);
                     break;
 
                 case Face.Back: // -Z
-                    vertices.Add(new Vector3(x1, y1, z0));
-                    vertices.Add(new Vector3(x0, y1, z0));
-                    vertices.Add(new Vector3(x0, y0, z0));
-                    vertices.Add(new Vector3(x1, y0, z0));
+                    pos0 = new Vector3(x1, y1, z0);
+                    pos1 = new Vector3(x0, y1, z0);
+                    pos2 = new Vector3(x0, y0, z0);
+                    pos3 = new Vector3(x1, y0, z0);
                     break;
 
                 case Face.Left: // -X
-                    vertices.Add(new Vector3(x0, y1, z0));
-                    vertices.Add(new Vector3(x0, y1, z1));
-                    vertices.Add(new Vector3(x0, y0, z1));
-                    vertices.Add(new Vector3(x0, y0, z0));
+                    pos0 = new Vector3(x0, y1, z0);
+                    pos1 = new Vector3(x0, y1, z1);
+                    pos2 = new Vector3(x0, y0, z1);
+                    pos3 = new Vector3(x0, y0, z0);
                     break;
 
                 case Face.Right: // +X
-                    vertices.Add(new Vector3(x1, y1, z1));
-                    vertices.Add(new Vector3(x1, y1, z0));
-                    vertices.Add(new Vector3(x1, y0, z0));
-                    vertices.Add(new Vector3(x1, y0, z1));
+                    pos0 = new Vector3(x1, y1, z1);
+                    pos1 = new Vector3(x1, y1, z0);
+                    pos2 = new Vector3(x1, y0, z0);
+                    pos3 = new Vector3(x1, y0, z1);
                     break;
 
                 case Face.Top: // +Y
-                    vertices.Add(new Vector3(x0, y1, z0));
-                    vertices.Add(new Vector3(x1, y1, z0));
-                    vertices.Add(new Vector3(x1, y1, z1));
-                    vertices.Add(new Vector3(x0, y1, z1));
+                    pos0 = new Vector3(x0, y1, z0);
+                    pos1 = new Vector3(x1, y1, z0);
+                    pos2 = new Vector3(x1, y1, z1);
+                    pos3 = new Vector3(x0, y1, z1);
                     break;
 
-                case Face.Bottom: // -Y
-                    vertices.Add(new Vector3(x0, y0, z1));
-                    vertices.Add(new Vector3(x1, y0, z1));
-                    vertices.Add(new Vector3(x1, y0, z0));
-                    vertices.Add(new Vector3(x0, y0, z0));
+                default: // Face.Bottom (-Y)
+                    pos0 = new Vector3(x0, y0, z1);
+                    pos1 = new Vector3(x1, y0, z1);
+                    pos2 = new Vector3(x1, y0, z0);
+                    pos3 = new Vector3(x0, y0, z0);
                     break;
             }
 
-            // Intuitive Texture Coordinates:
-            // atlasCoord.X = Column (0 to 15, left to right)
-            // atlasCoord.Y = Row (0 to 15, top to bottom)
             Vector2 atlasCoord = def.GetFaceAtlasCoord(face);
             float u0 = atlasCoord.X / ATLAS_SIZE;
             float u1 = (atlasCoord.X + 1f) / ATLAS_SIZE;
-
-            // Flip Y so row 0 is the TOP row of the PNG file
             float v0 = 1.0f - ((atlasCoord.Y + 1f) / ATLAS_SIZE); // bottom of tile
             float v1 = 1.0f - (atlasCoord.Y / ATLAS_SIZE);        // top of tile
 
-            // Quad corners: 0: Top-Left, 1: Top-Right, 2: Bottom-Right, 3: Bottom-Left
-            uvs.Add(new Vector2(u0, v1)); // 0: Top-Left
-            uvs.Add(new Vector2(u1, v1)); // 1: Top-Right
-            uvs.Add(new Vector2(u1, v0)); // 2: Bottom-Right
-            uvs.Add(new Vector2(u0, v0)); // 3: Bottom-Left
-
-            // Indices (CW winding matching GL.FrontFace(FrontFaceDirection.Cw))
-            indices.Add(0 + vertexOffset);
-            indices.Add(1 + vertexOffset);
-            indices.Add(2 + vertexOffset);
-            indices.Add(2 + vertexOffset);
-            indices.Add(3 + vertexOffset);
-            indices.Add(0 + vertexOffset);
-
-            vertexOffset += 4;
+            builder.AddQuad(pos0, pos1, pos2, pos3, u0, v0, u1, v1, tint, normal);
         }
 
         private static void AddDoubleSidedQuad(
@@ -265,12 +322,7 @@ namespace VoxelRenderEngine.src.World
             Vector2 atlasCoord,
             Vector3 tint,
             Vector3 normal,
-            List<Vector3> vertices,
-            List<Vector2> uvs,
-            List<Vector3> colors,
-            List<Vector3> normals,
-            List<uint> indices,
-            ref uint vertexOffset)
+            ChunkMeshBuilder builder)
         {
             float u0 = atlasCoord.X / ATLAS_SIZE;
             float u1 = (atlasCoord.X + 1f) / ATLAS_SIZE;
@@ -278,61 +330,15 @@ namespace VoxelRenderEngine.src.World
             float b1 = 1.0f - (atlasCoord.Y / ATLAS_SIZE);
 
             // Front side (CW winding)
-            vertices.Add(v0);
-            vertices.Add(v1);
-            vertices.Add(v2);
-            vertices.Add(v3);
-
-            for (int i = 0; i < 4; i++)
-            {
-                colors.Add(tint);
-                normals.Add(normal);
-            }
-
-            uvs.Add(new Vector2(u0, b1)); // 0: Top-Left
-            uvs.Add(new Vector2(u1, b1)); // 1: Top-Right
-            uvs.Add(new Vector2(u1, b0)); // 2: Bottom-Right
-            uvs.Add(new Vector2(u0, b0)); // 3: Bottom-Left
-
-            indices.Add(0 + vertexOffset);
-            indices.Add(1 + vertexOffset);
-            indices.Add(2 + vertexOffset);
-            indices.Add(2 + vertexOffset);
-            indices.Add(3 + vertexOffset);
-            indices.Add(0 + vertexOffset);
-
-            vertexOffset += 4;
+            builder.AddQuad(v0, v1, v2, v3, u0, b0, u1, b1, tint, normal);
 
             // Back side (reversed winding so visible from both sides)
-            vertices.Add(v1);
-            vertices.Add(v0);
-            vertices.Add(v3);
-            vertices.Add(v2);
-
-            for (int i = 0; i < 4; i++)
-            {
-                colors.Add(tint);
-                normals.Add(-normal);
-            }
-
-            uvs.Add(new Vector2(u1, b1));
-            uvs.Add(new Vector2(u0, b1));
-            uvs.Add(new Vector2(u0, b0));
-            uvs.Add(new Vector2(u1, b0));
-
-            indices.Add(0 + vertexOffset);
-            indices.Add(1 + vertexOffset);
-            indices.Add(2 + vertexOffset);
-            indices.Add(2 + vertexOffset);
-            indices.Add(3 + vertexOffset);
-            indices.Add(0 + vertexOffset);
-
-            vertexOffset += 4;
+            builder.AddQuad(v1, v0, v3, v2, u1, b0, u0, b1, tint, -normal);
         }
 
         private static void AddCrossQuad(
             float bx, float by, float bz, BlockDefinition def,
-            List<Vector3> vertices, List<Vector2> uvs, List<Vector3> colors, List<Vector3> normals, List<uint> indices, ref uint vertexOffset)
+            ChunkMeshBuilder builder)
         {
             Vector2 uv = def.GetFaceAtlasCoord(Face.Front);
             Vector3 tint = def.IsLightSource ? new Vector3(1.35f, 1.25f, 1.10f) : def.TintColor;
@@ -345,7 +351,7 @@ namespace VoxelRenderEngine.src.World
                 new Vector3(bx + r, by - 0.5f,  bz + r),
                 new Vector3(bx - r, by - 0.5f,  bz - r),
                 uv, tint, new Vector3(-0.7f, 0, 0.7f),
-                vertices, uvs, colors, normals, indices, ref vertexOffset
+                builder
             );
 
             // Diagonal 2
@@ -355,13 +361,13 @@ namespace VoxelRenderEngine.src.World
                 new Vector3(bx + r, by - 0.5f,  bz - r),
                 new Vector3(bx - r, by - 0.5f,  bz + r),
                 uv, tint, new Vector3(0.7f, 0, 0.7f),
-                vertices, uvs, colors, normals, indices, ref vertexOffset
+                builder
             );
         }
 
         private static void AddFlatSurface(
             float bx, float by, float bz, BlockDefinition def,
-            List<Vector3> vertices, List<Vector2> uvs, List<Vector3> colors, List<Vector3> normals, List<uint> indices, ref uint vertexOffset)
+            ChunkMeshBuilder builder)
         {
             Vector2 uv = def.GetFaceAtlasCoord(Face.Front);
             Vector3 tint = def.TintColor;
@@ -373,13 +379,13 @@ namespace VoxelRenderEngine.src.World
                 new Vector3(bx + 0.5f, y, bz + 0.5f),
                 new Vector3(bx - 0.5f, y, bz + 0.5f),
                 uv, tint, Vector3.UnitY,
-                vertices, uvs, colors, normals, indices, ref vertexOffset
+                builder
             );
         }
 
         private static void AddDoor(
             float bx, float by, float bz, BlockDefinition def, bool isOpen,
-            List<Vector3> vertices, List<Vector2> uvs, List<Vector3> colors, List<Vector3> normals, List<uint> indices, ref uint vertexOffset)
+            ChunkMeshBuilder builder)
         {
             Vector2 uv = def.GetFaceAtlasCoord(Face.Front);
             Vector3 tint = def.TintColor;
@@ -394,7 +400,7 @@ namespace VoxelRenderEngine.src.World
                     new Vector3(bx + 0.5f, by - 0.5f, z),
                     new Vector3(bx - 0.5f, by - 0.5f, z),
                     uv, tint, new Vector3(0, 0, 1),
-                    vertices, uvs, colors, normals, indices, ref vertexOffset
+                    builder
                 );
             }
             else
@@ -407,14 +413,14 @@ namespace VoxelRenderEngine.src.World
                     new Vector3(x, by - 0.5f, bz + 0.5f),
                     new Vector3(x, by - 0.5f, bz - 0.5f),
                     uv, tint, new Vector3(1, 0, 0),
-                    vertices, uvs, colors, normals, indices, ref vertexOffset
+                    builder
                 );
             }
         }
 
         private static void AddLever(
             float bx, float by, float bz, BlockDefinition def,
-            List<Vector3> vertices, List<Vector2> uvs, List<Vector3> colors, List<Vector3> normals, List<uint> indices, ref uint vertexOffset)
+            ChunkMeshBuilder builder)
         {
             Vector2 uv = def.GetFaceAtlasCoord(Face.Front);
             Vector3 tint = def.TintColor;
@@ -426,7 +432,7 @@ namespace VoxelRenderEngine.src.World
                 new Vector3(bx + 0.25f, by - 0.45f, bz + 0.25f),
                 new Vector3(bx - 0.25f, by - 0.45f, bz + 0.25f),
                 uv, tint, Vector3.UnitY,
-                vertices, uvs, colors, normals, indices, ref vertexOffset
+                builder
             );
 
             // Handle quad
@@ -436,13 +442,13 @@ namespace VoxelRenderEngine.src.World
                 new Vector3(bx + 0.15f, by - 0.45f, bz),
                 new Vector3(bx - 0.15f, by - 0.45f, bz),
                 uv, tint, new Vector3(0, 0, 1),
-                vertices, uvs, colors, normals, indices, ref vertexOffset
+                builder
             );
         }
 
         private static void AddButton(
             float bx, float by, float bz, BlockDefinition def,
-            List<Vector3> vertices, List<Vector2> uvs, List<Vector3> colors, List<Vector3> normals, List<uint> indices, ref uint vertexOffset)
+            ChunkMeshBuilder builder)
         {
             Vector2 uv = def.GetFaceAtlasCoord(Face.Front);
             Vector3 tint = def.TintColor;
@@ -453,7 +459,7 @@ namespace VoxelRenderEngine.src.World
                 new Vector3(bx + 0.2f, by - 0.42f, bz + 0.2f),
                 new Vector3(bx - 0.2f, by - 0.42f, bz + 0.2f),
                 uv, tint, Vector3.UnitY,
-                vertices, uvs, colors, normals, indices, ref vertexOffset
+                builder
             );
         }
     }

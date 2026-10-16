@@ -39,7 +39,85 @@ namespace VoxelRenderEngine.src.World
         PoweredRail = 32,
         PoweredRailOn = 33,
         MinecartItem = 34,
-        Portal = 35
+        Portal = 35,
+
+        // Ores & Minerals
+        GoldOre = 36,
+        DiamondOre = 37,
+        RedstoneOre = 38,
+        LapisOre = 39,
+        GoldBlock = 40,
+        IronBlock = 41,
+        DiamondBlock = 42,
+        LapisBlock = 43,
+
+        // Natural Terrain & Wood
+        Gravel = 44,
+        Clay = 45,
+        Sandstone = 46,
+        BirchLog = 47,
+        SpruceLog = 48,
+        SpruceLeaves = 49,
+        SnowBlock = 50,
+        SnowyGrass = 51,
+        Ice = 52,
+        Cactus = 53,
+        SugarCane = 54,
+
+        // Flora, Plants & Crops
+        Rose = 55,
+        Dandelion = 56,
+        RedMushroom = 57,
+        BrownMushroom = 58,
+        OakSapling = 59,
+        Wheat = 60,
+        Farmland = 61,
+
+        // Construction & Building
+        Bricks = 62,
+        SmoothStone = 63,
+        DoubleStoneSlab = 64,
+        MossyCobblestone = 65,
+        Bookshelf = 66,
+        Sponge = 67,
+        Ladder = 68,
+        Trapdoor = 69,
+        Cobweb = 70,
+
+        // Nether Blocks
+        Netherrack = 71,
+        SoulSand = 72,
+        Glowstone = 73,
+
+        // Redstone, Interactive & Food
+        TNT = 74,
+        MonsterSpawner = 75,
+        Dispenser = 76,
+        LitFurnace = 77,
+        RedstoneTorch = 78,
+        Jukebox = 79,
+        Pumpkin = 80,
+        CarvedPumpkin = 81,
+        JackOLantern = 82,
+        Cake = 83,
+
+        // 16 Wool Colors
+        WhiteWool = 84,
+        OrangeWool = 85,
+        MagentaWool = 86,
+        LightBlueWool = 87,
+        YellowWool = 88,
+        LimeWool = 89,
+        PinkWool = 90,
+        GrayWool = 91,
+        LightGrayWool = 92,
+        CyanWool = 93,
+        PurpleWool = 94,
+        BlueWool = 95,
+        BrownWool = 96,
+        GreenWool = 97,
+        RedWool = 98,
+        BlackWool = 99
     }
 
     public enum Face : byte
@@ -283,7 +361,136 @@ namespace VoxelRenderEngine.src.World
             Register(CreateUniformBlock(BlockType.MinecartItem, "Minecart", isSolid: false, isTransparent: true, hardness: 0f, new Vector2(6, 0)));
 
             // 7. Nether Portal Block (Translucent, glowing purple endgame rift)
-            Register(CreateUniformBlock(BlockType.Portal, "Nether Portal", isSolid: false, isTransparent: true, hardness: 0f, new Vector2(9, 2), tintColor: new Vector3(0.75f, 0.20f, 0.95f), isLightSource: true));
+            Register(CreateUniformBlock(BlockType.Portal, "Nether Portal", isSolid: false, isTransparent: true, hardness: 0f, new Vector2(14, 0), tintColor: new Vector3(0.75f, 0.20f, 0.95f), isLightSource: true));
+
+            // --- Ores & Minerals ---
+            Register(CreateUniformBlock(BlockType.GoldOre, "Gold Ore", isSolid: true, isTransparent: false, hardness: 3.0f, new Vector2(0, 2)));
+            Register(CreateUniformBlock(BlockType.DiamondOre, "Diamond Ore", isSolid: true, isTransparent: false, hardness: 3.5f, new Vector2(2, 3)));
+            Register(CreateUniformBlock(BlockType.RedstoneOre, "Redstone Ore", isSolid: true, isTransparent: false, hardness: 3.0f, new Vector2(3, 3), isLightSource: true));
+            Register(CreateUniformBlock(BlockType.LapisOre, "Lapis Lazuli Ore", isSolid: true, isTransparent: false, hardness: 3.0f, new Vector2(0, 10)));
+            Register(CreateUniformBlock(BlockType.GoldBlock, "Block of Gold", isSolid: true, isTransparent: false, hardness: 3.0f, new Vector2(7, 1)));
+            Register(CreateUniformBlock(BlockType.IronBlock, "Block of Iron", isSolid: true, isTransparent: false, hardness: 5.0f, new Vector2(6, 1)));
+            Register(CreateUniformBlock(BlockType.DiamondBlock, "Block of Diamond", isSolid: true, isTransparent: false, hardness: 5.0f, new Vector2(8, 1)));
+            Register(CreateUniformBlock(BlockType.LapisBlock, "Lapis Lazuli Block", isSolid: true, isTransparent: false, hardness: 3.0f, new Vector2(0, 9)));
+
+            // --- Natural Terrain & Wood ---
+            Register(CreateUniformBlock(BlockType.Gravel, "Gravel", isSolid: true, isTransparent: false, hardness: 0.6f, new Vector2(3, 1)));
+            Register(CreateUniformBlock(BlockType.Clay, "Clay Block", isSolid: true, isTransparent: false, hardness: 0.6f, new Vector2(8, 4)));
+            Register(CreateMultiFaceBlock(BlockType.Sandstone, "Sandstone", isSolid: true, isTransparent: false, hardness: 0.8f, top: new Vector2(0, 11), side: new Vector2(0, 12), bottom: new Vector2(0, 13)));
+            Register(CreateMultiFaceBlock(BlockType.BirchLog, "Birch Log", isSolid: true, isTransparent: false, hardness: 2.0f, top: new Vector2(5, 1), side: new Vector2(5, 7), bottom: new Vector2(5, 1)));
+            Register(CreateMultiFaceBlock(BlockType.SpruceLog, "Spruce Log", isSolid: true, isTransparent: false, hardness: 2.0f, top: new Vector2(5, 1), side: new Vector2(4, 7), bottom: new Vector2(5, 1)));
+            Register(CreateUniformBlock(BlockType.SpruceLeaves, "Spruce Leaves", isSolid: true, isTransparent: true, hardness: 0.2f, new Vector2(5, 3), tintColor: new Vector3(0.35f, 0.65f, 0.35f)));
+            Register(CreateUniformBlock(BlockType.SnowBlock, "Snow Block", isSolid: true, isTransparent: false, hardness: 0.2f, new Vector2(2, 4)));
+            Register(CreateMultiFaceBlock(BlockType.SnowyGrass, "Snowy Grass", isSolid: true, isTransparent: false, hardness: 0.6f, top: new Vector2(2, 4), side: new Vector2(4, 4), bottom: new Vector2(2, 0)));
+            Register(CreateUniformBlock(BlockType.Ice, "Ice", isSolid: true, isTransparent: true, hardness: 0.5f, new Vector2(3, 4)));
+            Register(CreateMultiFaceBlock(BlockType.Cactus, "Cactus", isSolid: true, isTransparent: true, hardness: 0.4f, top: new Vector2(5, 4), side: new Vector2(6, 4), bottom: new Vector2(7, 4)));
+            Register(CreateUniformBlock(BlockType.SugarCane, "Sugar Cane", isSolid: false, isTransparent: true, hardness: 0f, new Vector2(9, 4), meshType: MeshType.CrossQuad));
+
+            // --- Flora, Plants & Crops ---
+            Register(CreateUniformBlock(BlockType.Rose, "Rose", isSolid: false, isTransparent: true, hardness: 0f, new Vector2(12, 0), meshType: MeshType.CrossQuad));
+            Register(CreateUniformBlock(BlockType.Dandelion, "Dandelion", isSolid: false, isTransparent: true, hardness: 0f, new Vector2(13, 0), meshType: MeshType.CrossQuad));
+            Register(CreateUniformBlock(BlockType.RedMushroom, "Red Mushroom", isSolid: false, isTransparent: true, hardness: 0f, new Vector2(12, 1), meshType: MeshType.CrossQuad));
+            Register(CreateUniformBlock(BlockType.BrownMushroom, "Brown Mushroom", isSolid: false, isTransparent: true, hardness: 0f, new Vector2(13, 1), meshType: MeshType.CrossQuad));
+            Register(CreateUniformBlock(BlockType.OakSapling, "Oak Sapling", isSolid: false, isTransparent: true, hardness: 0f, new Vector2(15, 0), meshType: MeshType.CrossQuad));
+            Register(CreateUniformBlock(BlockType.Wheat, "Wheat", isSolid: false, isTransparent: true, hardness: 0f, new Vector2(15, 5), meshType: MeshType.CrossQuad));
+            Register(CreateMultiFaceBlock(BlockType.Farmland, "Farmland", isSolid: true, isTransparent: false, hardness: 0.6f, top: new Vector2(6, 5), side: new Vector2(2, 0), bottom: new Vector2(2, 0)));
+
+            // --- Construction & Building ---
+            Register(CreateUniformBlock(BlockType.Bricks, "Bricks", isSolid: true, isTransparent: false, hardness: 2.0f, new Vector2(7, 0)));
+            Register(CreateUniformBlock(BlockType.SmoothStone, "Smooth Stone", isSolid: true, isTransparent: false, hardness: 1.5f, new Vector2(6, 0)));
+            Register(CreateMultiFaceBlock(BlockType.DoubleStoneSlab, "Double Stone Slab", isSolid: true, isTransparent: false, hardness: 2.0f, top: new Vector2(6, 0), side: new Vector2(5, 0), bottom: new Vector2(6, 0)));
+            Register(CreateUniformBlock(BlockType.MossyCobblestone, "Mossy Cobblestone", isSolid: true, isTransparent: false, hardness: 2.0f, new Vector2(4, 2)));
+            Register(CreateMultiFaceBlock(BlockType.Bookshelf, "Bookshelf", isSolid: true, isTransparent: false, hardness: 1.5f, top: new Vector2(4, 0), side: new Vector2(3, 2), bottom: new Vector2(4, 0)));
+            Register(CreateUniformBlock(BlockType.Sponge, "Sponge", isSolid: true, isTransparent: false, hardness: 0.6f, new Vector2(0, 3)));
+            Register(CreateUniformBlock(BlockType.Ladder, "Ladder", isSolid: false, isTransparent: true, hardness: 0.4f, new Vector2(3, 5), meshType: MeshType.CrossQuad));
+            Register(CreateUniformBlock(BlockType.Trapdoor, "Trapdoor", isSolid: false, isTransparent: true, hardness: 1.5f, new Vector2(4, 5)));
+            Register(CreateUniformBlock(BlockType.Cobweb, "Cobweb", isSolid: false, isTransparent: true, hardness: 4.0f, new Vector2(11, 0), meshType: MeshType.CrossQuad));
+
+            // --- Nether Blocks ---
+            Register(CreateUniformBlock(BlockType.Netherrack, "Netherrack", isSolid: true, isTransparent: false, hardness: 0.4f, new Vector2(7, 6)));
+            Register(CreateUniformBlock(BlockType.SoulSand, "Soul Sand", isSolid: true, isTransparent: false, hardness: 0.5f, new Vector2(8, 6)));
+            Register(CreateUniformBlock(BlockType.Glowstone, "Glowstone", isSolid: true, isTransparent: false, hardness: 0.3f, new Vector2(9, 6), isLightSource: true));
+
+            // --- Redstone, Interactive & Food ---
+            Register(CreateMultiFaceBlock(BlockType.TNT, "TNT", isSolid: true, isTransparent: false, hardness: 0f, top: new Vector2(9, 0), side: new Vector2(8, 0), bottom: new Vector2(10, 0)));
+            Register(CreateUniformBlock(BlockType.MonsterSpawner, "Monster Spawner", isSolid: true, isTransparent: true, hardness: 5.0f, new Vector2(1, 4)));
+            Register(CreateDirectionalBlock(BlockType.Dispenser, "Dispenser", isSolid: true, isTransparent: false, hardness: 3.5f, front: new Vector2(14, 2), side: new Vector2(13, 2), top: new Vector2(14, 3)));
+            Register(CreateDirectionalBlock(BlockType.LitFurnace, "Burning Furnace", isSolid: true, isTransparent: false, hardness: 3.5f, front: new Vector2(13, 3), side: new Vector2(13, 2), top: new Vector2(14, 3), isLightSource: true));
+            Register(CreateUniformBlock(BlockType.RedstoneTorch, "Redstone Torch", isSolid: false, isTransparent: true, hardness: 0f, new Vector2(3, 6), meshType: MeshType.CrossQuad, isLightSource: true));
+            Register(CreateMultiFaceBlock(BlockType.Jukebox, "Jukebox", isSolid: true, isTransparent: false, hardness: 2.0f, top: new Vector2(11, 4), side: new Vector2(10, 4), bottom: new Vector2(4, 0)));
+            Register(CreateMultiFaceBlock(BlockType.Pumpkin, "Pumpkin", isSolid: true, isTransparent: false, hardness: 1.0f, top: new Vector2(6, 6), side: new Vector2(6, 7), bottom: new Vector2(6, 6)));
+            Register(CreateDirectionalBlock(BlockType.CarvedPumpkin, "Carved Pumpkin", isSolid: true, isTransparent: false, hardness: 1.0f, front: new Vector2(7, 7), side: new Vector2(6, 7), top: new Vector2(6, 6)));
+            Register(CreateDirectionalBlock(BlockType.JackOLantern, "Jack o'Lantern", isSolid: true, isTransparent: false, hardness: 1.0f, front: new Vector2(8, 7), side: new Vector2(6, 7), top: new Vector2(6, 6), isLightSource: true));
+            Register(CreateMultiFaceBlock(BlockType.Cake, "Cake", isSolid: true, isTransparent: true, hardness: 0.5f, top: new Vector2(11, 6), side: new Vector2(12, 6), bottom: new Vector2(14, 6)));
+
+            // --- 16 Wool Colors ---
+            Register(CreateUniformBlock(BlockType.WhiteWool, "White Wool", isSolid: true, isTransparent: false, hardness: 0.8f, new Vector2(0, 4)));
+            Register(CreateUniformBlock(BlockType.OrangeWool, "Orange Wool", isSolid: true, isTransparent: false, hardness: 0.8f, new Vector2(2, 14)));
+            Register(CreateUniformBlock(BlockType.MagentaWool, "Magenta Wool", isSolid: true, isTransparent: false, hardness: 0.8f, new Vector2(2, 13)));
+            Register(CreateUniformBlock(BlockType.LightBlueWool, "Light Blue Wool", isSolid: true, isTransparent: false, hardness: 0.8f, new Vector2(2, 12)));
+            Register(CreateUniformBlock(BlockType.YellowWool, "Yellow Wool", isSolid: true, isTransparent: false, hardness: 0.8f, new Vector2(2, 11)));
+            Register(CreateUniformBlock(BlockType.LimeWool, "Lime Wool", isSolid: true, isTransparent: false, hardness: 0.8f, new Vector2(2, 10)));
+            Register(CreateUniformBlock(BlockType.PinkWool, "Pink Wool", isSolid: true, isTransparent: false, hardness: 0.8f, new Vector2(2, 9)));
+            Register(CreateUniformBlock(BlockType.GrayWool, "Gray Wool", isSolid: true, isTransparent: false, hardness: 0.8f, new Vector2(2, 8)));
+            Register(CreateUniformBlock(BlockType.LightGrayWool, "Light Gray Wool", isSolid: true, isTransparent: false, hardness: 0.8f, new Vector2(1, 15)));
+            Register(CreateUniformBlock(BlockType.CyanWool, "Cyan Wool", isSolid: true, isTransparent: false, hardness: 0.8f, new Vector2(1, 14)));
+            Register(CreateUniformBlock(BlockType.PurpleWool, "Purple Wool", isSolid: true, isTransparent: false, hardness: 0.8f, new Vector2(1, 13)));
+            Register(CreateUniformBlock(BlockType.BlueWool, "Blue Wool", isSolid: true, isTransparent: false, hardness: 0.8f, new Vector2(1, 12)));
+            Register(CreateUniformBlock(BlockType.BrownWool, "Brown Wool", isSolid: true, isTransparent: false, hardness: 0.8f, new Vector2(1, 11)));
+            Register(CreateUniformBlock(BlockType.GreenWool, "Green Wool", isSolid: true, isTransparent: false, hardness: 0.8f, new Vector2(1, 10)));
+            Register(CreateUniformBlock(BlockType.RedWool, "Red Wool", isSolid: true, isTransparent: false, hardness: 0.8f, new Vector2(1, 9)));
+            Register(CreateUniformBlock(BlockType.BlackWool, "Black Wool", isSolid: true, isTransparent: false, hardness: 0.8f, new Vector2(1, 8)));
+        }
+
+        private static BlockDefinition CreateMultiFaceBlock(
+            BlockType type,
+            string name,
+            bool isSolid,
+            bool isTransparent,
+            float hardness,
+            Vector2 top,
+            Vector2 side,
+            Vector2 bottom,
+            Vector3? tintColor = null,
+            MeshType meshType = MeshType.StandardCube,
+            bool isLightSource = false)
+        {
+            return new BlockDefinition(
+                type,
+                name,
+                isSolid,
+                isTransparent,
+                hardness,
+                new[] { side, side, side, side, top, bottom },
+                tintColor,
+                meshType,
+                isLightSource
+            );
+        }
+
+        private static BlockDefinition CreateDirectionalBlock(
+            BlockType type,
+            string name,
+            bool isSolid,
+            bool isTransparent,
+            float hardness,
+            Vector2 front,
+            Vector2 side,
+            Vector2 top,
+            Vector3? tintColor = null,
+            bool isLightSource = false)
+        {
+            return new BlockDefinition(
+                type,
+                name,
+                isSolid,
+                isTransparent,
+                hardness,
+                new[] { front, side, side, side, top, top },
+                tintColor,
+                MeshType.StandardCube,
+                isLightSource
+            );
         }
 
         private static BlockDefinition CreateUniformBlock(

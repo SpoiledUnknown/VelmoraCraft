@@ -29,6 +29,13 @@ namespace VoxelRenderEngine.src.Graphics
             GL.BufferData(BufferTarget.ArrayBuffer, data.Length * Vector2.SizeInBytes, data, BufferUsage.StaticDraw);
         }
 
+        public VertexBufferObject(ReadOnlySpan<ChunkVertex> data)
+        {
+            ID = GL.GenBuffer();
+            GL.BindBuffer(BufferTarget.ArrayBuffer, ID);
+            GL.BufferData(BufferTarget.ArrayBuffer, data.Length * ChunkVertex.SizeInBytes, data, BufferUsage.StaticDraw);
+        }
+
         public void Bind() { GL.BindBuffer(BufferTarget.ArrayBuffer, ID); }
         public void UnBind() { GL.BindBuffer(BufferTarget.ArrayBuffer, 0); }
         public void Delete() { GL.DeleteBuffer(ID); }

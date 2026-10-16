@@ -1,3 +1,4 @@
+using OpenTK.Graphics.OpenGL;
 using OpenTK.Mathematics;
 using System.Collections.Concurrent;
 using VoxelRenderEngine.src.Entities;
@@ -31,6 +32,7 @@ namespace VoxelRenderEngine.src.World
         public readonly List<Minecart> Minecarts = new List<Minecart>();
         private readonly ConcurrentDictionary<Vector3i, byte> lightSources = new ConcurrentDictionary<Vector3i, byte>();
         public readonly ConcurrentDictionary<Vector3i, BlockType> ModifiedBlocks = new ConcurrentDictionary<Vector3i, BlockType>();
+        public readonly FluidSystem FluidSystem = new FluidSystem();
 
         // Thread-safe queues for multithreaded terrain generation and meshing
         private readonly ConcurrentQueue<Vector2i> workQueue = new ConcurrentQueue<Vector2i>();
@@ -41,6 +43,13 @@ namespace VoxelRenderEngine.src.World
         private readonly CancellationTokenSource cancellationTokenSource = new CancellationTokenSource();
         private readonly Thread[] workerThreads;
         private readonly AutoResetEvent workAvailable = new AutoResetEvent(false);
+
+        // Cached reusable collections to eliminate per-frame allocations
+        private readonly List<Chunk> visibleChunks = new List<Chunk>(512);
+        private readonly List<(Vector2i coord, int distSq)> toEnqueueChunks = new List<(Vector2i, int)>(128);
+        private readonly List<(Vector3 Position, Vector3 Color, float Radius, float Intensity)> activePointLights = new List<(Vector3, Vector3, float, float)>(16);
+        private readonly List<(Vector3i Pos, float DistSq)> lightCandidates = new List<(Vector3i Pos, float DistSq)>(64);
+        private bool hasTrimmedStartupMemory = false;
 
         private float streamTimer = 0f;
         private Vector2i lastStreamedChunk = new Vector2i(-9999, -9999);
@@ -223,6 +232,8 @@ namespace VoxelRenderEngine.src.World
             {
                 if (queuedChunks.Add(coord))
                 {
+                    var chunk = GetOrCreateChunk(coord);
+                    chunk.IsGeneratingMesh = true;
                     workQueue.Enqueue(coord);
                     workAvailable.Set();
                 }
@@ -233,14 +244,24 @@ namespace VoxelRenderEngine.src.World
         {
             while (!cancellationTokenSource.IsCancellationRequested)
             {
+                // Throttling: If the upload queue has a backlog, wait briefly
+                // so background workers don't run miles ahead and hoard memory
+                if (readyToUploadMeshes.Count >= 24)
+                {
+                    Thread.Sleep(5);
+                    continue;
+                }
+
                 if (workQueue.TryDequeue(out var coord))
                 {
-                    lock (queueLock)
+                    if (!IsChunkInsideWorld(coord))
                     {
-                        queuedChunks.Remove(coord);
+                        lock (queueLock)
+                        {
+                            queuedChunks.Remove(coord);
+                        }
+                        continue;
                     }
-
-                    if (!IsChunkInsideWorld(coord)) continue;
 
                     var chunk = GetOrCreateChunk(coord);
 
@@ -329,8 +350,14 @@ namespace VoxelRenderEngine.src.World
                 if (chunks.TryGetValue(item.coord, out var chunk))
                 {
                     chunk.UploadMesh(item.mesh);
+                    chunk.IsGeneratingMesh = false;
                     uploaded++;
                 }
+                lock (queueLock)
+                {
+                    queuedChunks.Remove(item.coord);
+                }
+                item.mesh.Dispose();
             }
 
             // 2. Real-time chunk streaming around view position
@@ -360,6 +387,20 @@ namespace VoxelRenderEngine.src.World
                     cart.Update(this, deltaTime);
                 }
             }
+
+            // 4. Update fluid expansion simulation (water and lava)
+            if (deltaTime > 0f)
+            {
+                FluidSystem.Update(this, deltaTime);
+            }
+
+            // 5. Memory trim once the initial world generation burst settles
+            if (!hasTrimmedStartupMemory && workQueue.IsEmpty && readyToUploadMeshes.IsEmpty && chunks.Count >= 25)
+            {
+                hasTrimmedStartupMemory = true;
+                System.Runtime.GCSettings.LargeObjectHeapCompactionMode = System.Runtime.GCLargeObjectHeapCompactionMode.CompactOnce;
+                GC.Collect(2, GCCollectionMode.Aggressive, true, true);
+            }
         }
 
         // Legacy / simple overload
@@ -371,7 +412,7 @@ namespace VoxelRenderEngine.src.World
         private void StreamChunksAround(int centerCX, int centerCZ)
         {
             int r = ViewDistanceChunks;
-            var toEnqueue = new List<(Vector2i coord, int distSq)>();
+            toEnqueueChunks.Clear();
 
             for (int dx = -r; dx <= r; dx++)
             {
@@ -386,9 +427,16 @@ namespace VoxelRenderEngine.src.World
 
                         if (IsChunkInsideWorld(coord))
                         {
+                            bool alreadyQueued;
+                            lock (queueLock)
+                            {
+                                alreadyQueued = queuedChunks.Contains(coord);
+                            }
+                            if (alreadyQueued) continue;
+
                             if (!chunks.TryGetValue(coord, out var chunk) || (!chunk.HasMesh && !chunk.IsGeneratingMesh))
                             {
-                                toEnqueue.Add((coord, distSq));
+                                toEnqueueChunks.Add((coord, distSq));
                             }
                         }
                     }
@@ -396,12 +444,12 @@ namespace VoxelRenderEngine.src.World
             }
 
             // Sort so closest chunks to player/camera are generated and meshed first!
-            toEnqueue.Sort((a, b) => a.distSq.CompareTo(b.distSq));
+            toEnqueueChunks.Sort((a, b) => a.distSq.CompareTo(b.distSq));
 
             int budget = 32; // Limit enqueue batch size to avoid overwhelming queue
-            for (int i = 0; i < Math.Min(budget, toEnqueue.Count); i++)
+            for (int i = 0; i < Math.Min(budget, toEnqueueChunks.Count); i++)
             {
-                EnqueueChunk(toEnqueue[i].coord);
+                EnqueueChunk(toEnqueueChunks[i].coord);
             }
 
             // Release GPU buffers for far chunks beyond view distance + 4
@@ -424,6 +472,8 @@ namespace VoxelRenderEngine.src.World
         public void Render(ShaderProgram shaderProgram, Camera? camera = null)
         {
             shaderProgram.Bind();
+
+            visibleChunks.Clear();
 
             if (camera != null)
             {
@@ -464,7 +514,7 @@ namespace VoxelRenderEngine.src.World
                         }
                     }
 
-                    chunk.Render();
+                    visibleChunks.Add(chunk);
                 }
             }
             else
@@ -473,10 +523,42 @@ namespace VoxelRenderEngine.src.World
                 {
                     if (chunk.HasMesh)
                     {
-                        chunk.Render();
+                        visibleChunks.Add(chunk);
                     }
                 }
             }
+
+            int transLoc = GL.GetUniformLocation(shaderProgram.ID, "isTranslucentPass");
+
+            // PASS 1: Render all Opaque terrain blocks (depth write ON, blend OFF)
+            // Ensures all solid blocks under water are fully rendered first!
+            GL.Uniform1i(transLoc, 0);
+            GL.Disable(EnableCap.Blend);
+            GL.DepthMask(true);
+            GL.DepthFunc(DepthFunction.Less);
+
+            foreach (var chunk in visibleChunks)
+            {
+                chunk.RenderOpaque();
+            }
+
+            // PASS 2: Render Translucent Water & Portal surfaces (depth write OFF, blend ON)
+            // Water blends smoothly on top of the solid blocks underneath!
+            GL.Uniform1i(transLoc, 1);
+            GL.Enable(EnableCap.Blend);
+            GL.BlendFunc(BlendingFactor.SrcAlpha, BlendingFactor.OneMinusSrcAlpha);
+            GL.DepthMask(false);
+            GL.DepthFunc(DepthFunction.Lequal);
+
+            foreach (var chunk in visibleChunks)
+            {
+                chunk.RenderWater();
+            }
+
+            // Restore standard GL pipeline states
+            GL.DepthMask(true);
+            GL.Disable(EnableCap.Blend);
+            GL.DepthFunc(DepthFunction.Less);
 
             // Render minecarts with the same active shader & texture atlas
             if (Minecarts.Count > 0)
@@ -501,6 +583,11 @@ namespace VoxelRenderEngine.src.World
             }
             chunks.Clear();
 
+            while (readyToUploadMeshes.TryDequeue(out var item))
+            {
+                item.mesh.Dispose();
+            }
+
             MinecartRenderer.Cleanup();
             Minecarts.Clear();
             lightSources.Clear();
@@ -508,10 +595,10 @@ namespace VoxelRenderEngine.src.World
 
         public List<(Vector3 Position, Vector3 Color, float Radius, float Intensity)> GetActivePointLights(Vector3 playerPos, int maxCount = 15)
         {
-            var result = new List<(Vector3, Vector3, float, float)>(maxCount);
-            if (lightSources.IsEmpty) return result;
+            activePointLights.Clear();
+            if (lightSources.IsEmpty) return activePointLights;
 
-            var candidates = new List<(Vector3i Pos, float DistSq)>();
+            lightCandidates.Clear();
             foreach (var pos in lightSources.Keys)
             {
                 float dx = pos.X + 0.5f - playerPos.X;
@@ -521,16 +608,16 @@ namespace VoxelRenderEngine.src.World
 
                 if (distSq < 625.0f) // Within 25 blocks radius
                 {
-                    candidates.Add((pos, distSq));
+                    lightCandidates.Add((pos, distSq));
                 }
             }
 
-            candidates.Sort((a, b) => a.DistSq.CompareTo(b.DistSq));
-            int count = Math.Min(maxCount, candidates.Count);
+            lightCandidates.Sort((a, b) => a.DistSq.CompareTo(b.DistSq));
+            int count = Math.Min(maxCount, lightCandidates.Count);
 
             for (int i = 0; i < count; i++)
             {
-                var pos = candidates[i].Pos;
+                var pos = lightCandidates[i].Pos;
                 byte blockId = GetBlockWorld(pos.X, pos.Y, pos.Z);
 
                 Vector3 lightColor;
@@ -548,15 +635,39 @@ namespace VoxelRenderEngine.src.World
                     radius = 14.0f;
                     intensity = 1.6f;
                 }
+                else if (blockId == (byte)BlockType.Glowstone)
+                {
+                    lightColor = new Vector3(1.0f, 0.92f, 0.60f);
+                    radius = 15.0f;
+                    intensity = 1.5f;
+                }
+                else if (blockId == (byte)BlockType.JackOLantern)
+                {
+                    lightColor = new Vector3(1.0f, 0.65f, 0.20f);
+                    radius = 15.0f;
+                    intensity = 1.5f;
+                }
+                else if (blockId == (byte)BlockType.LitFurnace)
+                {
+                    lightColor = new Vector3(1.0f, 0.55f, 0.20f);
+                    radius = 13.0f;
+                    intensity = 1.4f;
+                }
+                else if (blockId == (byte)BlockType.RedstoneTorch || blockId == (byte)BlockType.RedstoneOre)
+                {
+                    lightColor = new Vector3(1.0f, 0.15f, 0.10f);
+                    radius = 9.0f;
+                    intensity = 1.0f;
+                }
                 else
                 {
                     lightColor = new Vector3(1.0f, 0.75f, 0.40f);
                 }
 
-                result.Add((new Vector3(pos.X + 0.5f, pos.Y + 0.5f, pos.Z + 0.5f), lightColor, radius, intensity));
+                activePointLights.Add((new Vector3(pos.X + 0.5f, pos.Y + 0.5f, pos.Z + 0.5f), lightColor, radius, intensity));
             }
 
-            return result;
+            return activePointLights;
         }
     }
 }

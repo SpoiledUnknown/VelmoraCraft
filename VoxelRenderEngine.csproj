@@ -12,6 +12,7 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <PackageReference Include="NLayer" Version="3.0.0" />
     <PackageReference Include="OpenTK" Version="5.0.0-pre.16" />
     <PackageReference Include="StbImageSharp" Version="2.30.16" />
   </ItemGroup>

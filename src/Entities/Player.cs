@@ -66,12 +66,29 @@ namespace VoxelRenderEngine.src.Entities
         public int BlocksPlaced { get; set; } = 0;
         private float footstepTimer = 0f;
 
+        // Health, Oxygen & Survival state
+        public float MaxHealth { get; set; } = 100.0f;
+        public float Health { get; set; } = 100.0f;
+        public float MaxOxygen { get; set; } = 100.0f;
+        public float Oxygen { get; set; } = 100.0f;
+        public Vector3 SpawnPosition { get; set; }
+        public float FallDistance { get; private set; } = 0f;
+
+        public float DamageFlashTimer { get; private set; } = 0f;
+        private float drownDamageTimer = 0f;
+        private float lavaDamageTimer = 0f;
+        private float timeSinceLastDamage = 10.0f;
+
+        private readonly List<AABB> candidateBoxes = new List<AABB>(64);
         public readonly List<ItemDrop> DroppedItems = new List<ItemDrop>();
 
         public Player(Vector3 startPosition, Camera camera)
         {
             Position = startPosition;
+            SpawnPosition = startPosition;
             Camera = camera;
+            Health = MaxHealth;
+            Oxygen = MaxOxygen;
             UpdateCamera();
 
             // Starter items for testing crafting, smelting, placing, chest storage
@@ -95,6 +112,26 @@ namespace VoxelRenderEngine.src.Entities
             Inventory.Slots[15] = new UI.ItemStack(BlockType.MinecartItem, 2);
             Inventory.Slots[16] = new UI.ItemStack(BlockType.Obsidian, 14);
             Inventory.Slots[17] = new UI.ItemStack(BlockType.FlintAndSteel, 1);
+
+            // New atlas block showcase items for creative testing
+            Inventory.Slots[18] = new UI.ItemStack(BlockType.Glowstone, 64);
+            Inventory.Slots[19] = new UI.ItemStack(BlockType.JackOLantern, 64);
+            Inventory.Slots[20] = new UI.ItemStack(BlockType.TNT, 64);
+            Inventory.Slots[21] = new UI.ItemStack(BlockType.Bookshelf, 64);
+            Inventory.Slots[22] = new UI.ItemStack(BlockType.Bricks, 64);
+            Inventory.Slots[23] = new UI.ItemStack(BlockType.MossyCobblestone, 64);
+            Inventory.Slots[24] = new UI.ItemStack(BlockType.DiamondBlock, 64);
+            Inventory.Slots[25] = new UI.ItemStack(BlockType.GoldBlock, 64);
+            Inventory.Slots[26] = new UI.ItemStack(BlockType.LapisBlock, 64);
+            Inventory.Slots[27] = new UI.ItemStack(BlockType.Ice, 64);
+            Inventory.Slots[28] = new UI.ItemStack(BlockType.Cactus, 64);
+            Inventory.Slots[29] = new UI.ItemStack(BlockType.Rose, 64);
+            Inventory.Slots[30] = new UI.ItemStack(BlockType.RedWool, 64);
+            Inventory.Slots[31] = new UI.ItemStack(BlockType.BlueWool, 64);
+            Inventory.Slots[32] = new UI.ItemStack(BlockType.LimeWool, 64);
+            Inventory.Slots[33] = new UI.ItemStack(BlockType.Cake, 64);
+            Inventory.Slots[34] = new UI.ItemStack(BlockType.Jukebox, 64);
+            Inventory.Slots[35] = new UI.ItemStack(BlockType.MonsterSpawner, 64);
         }
 
         public AABB GetAABB()
@@ -145,6 +182,7 @@ namespace VoxelRenderEngine.src.Entities
                     HandleBlockInteractions(world, mouse, deltaTime);
                     RedstoneSystem.Update(world, deltaTime);
                     UpdateItemDrops(world, deltaTime);
+                    UpdateHealthAndOxygen(world, deltaTime);
                     return;
                 }
             }
@@ -165,6 +203,7 @@ namespace VoxelRenderEngine.src.Entities
             HandleBlockInteractions(world, mouse, deltaTime);
             RedstoneSystem.Update(world, deltaTime);
             UpdateItemDrops(world, deltaTime);
+            UpdateHealthAndOxygen(world, deltaTime);
 
             // Check if player entered Nether Portal
             if (PortalSystem.IsPlayerInsidePortal(world, this))
@@ -227,6 +266,7 @@ namespace VoxelRenderEngine.src.Entities
             }
 
             ClampToWorldBounds();
+            FallDistance = 0f;
         }
 
         private void UpdateWalkMovement(World.World world, KeyboardState keyboard, float deltaTime)
@@ -280,11 +320,18 @@ namespace VoxelRenderEngine.src.Entities
                 {
                     vy = -3.8f; // Dive downwards
                 }
+
+                FallDistance = 0f; // Liquid cushions and prevents all fall damage
+                Velocity = new Vector3(vx, vy, vz);
+
+                MoveWithCollision(world, Velocity * deltaTime);
+                ClampToWorldBounds();
+                return;
             }
             else
             {
                 bool wasGrounded = IsGrounded;
-                float prevVelY = Velocity.Y;
+                float startY = Position.Y;
 
                 // Apply normal gravity
                 vy = Velocity.Y - (Gravity * deltaTime);
@@ -303,10 +350,36 @@ namespace VoxelRenderEngine.src.Entities
                 MoveWithCollision(world, Velocity * deltaTime);
                 ClampToWorldBounds();
 
-                // Landing sound
-                if (!wasGrounded && IsGrounded && prevVelY < -3.8f)
+                float endY = Position.Y;
+                float dropThisFrame = startY - endY;
+
+                if (dropThisFrame > 0f)
+                {
+                    FallDistance += dropThisFrame;
+                }
+                else if (Velocity.Y > 0f)
+                {
+                    // Jumping upwards or climbing up, reset fall counter
+                    FallDistance = 0f;
+                }
+
+                // Landing sound & Fall Damage
+                if (!wasGrounded && IsGrounded)
                 {
                     AudioManager?.PlayPlayerLand();
+
+                    // Fall damage occurs only after falling more than 3 blocks (say after the height of 3 blocks)
+                    if (FallDistance > 3.0f)
+                    {
+                        float excessBlocks = FallDistance - 3.0f;
+                        float damage = excessBlocks * 10.0f;
+                        TakeDamage(damage, "fall", world);
+                    }
+                    FallDistance = 0f;
+                }
+                else if (IsGrounded)
+                {
+                    FallDistance = 0f;
                 }
 
                 // Footstep sounds
@@ -329,12 +402,6 @@ namespace VoxelRenderEngine.src.Entities
                 }
                 return;
             }
-
-            Velocity = new Vector3(vx, vy, vz);
-
-            // Move and collide against voxel terrain
-            MoveWithCollision(world, Velocity * deltaTime);
-            ClampToWorldBounds();
         }
 
         private void MoveWithCollision(World.World world, Vector3 movement)
@@ -349,7 +416,7 @@ namespace VoxelRenderEngine.src.Entities
             int minZ = (int)MathF.Floor(playerBox.Min.Z + MathF.Min(0, movement.Z) - 0.5f);
             int maxZ = (int)MathF.Ceiling(playerBox.Max.Z + MathF.Max(0, movement.Z) + 0.5f);
 
-            var candidateBoxes = new List<AABB>();
+            candidateBoxes.Clear();
             for (int x = minX; x <= maxX; x++)
             {
                 for (int y = minY; y <= maxY; y++)
@@ -365,6 +432,8 @@ namespace VoxelRenderEngine.src.Entities
                 }
             }
 
+            bool hitGroundThisFrame = false;
+
             // Y axis collision
             if (movement.Y != 0)
             {
@@ -378,11 +447,11 @@ namespace VoxelRenderEngine.src.Entities
                             movement.Y = box.Min.Y - playerBox.Max.Y;
                             Velocity = new Vector3(Velocity.X, 0, Velocity.Z);
                         }
-                        else if (movement.Y < 0 && playerBox.Min.Y >= box.Max.Y && playerBox.Min.Y + movement.Y < box.Max.Y)
+                        else if (movement.Y < 0 && playerBox.Min.Y >= box.Max.Y - 0.05f && playerBox.Min.Y + movement.Y <= box.Max.Y)
                         {
                             movement.Y = box.Max.Y - playerBox.Min.Y;
                             Velocity = new Vector3(Velocity.X, 0, Velocity.Z);
-                            IsGrounded = true;
+                            hitGroundThisFrame = true;
                         }
                     }
                 }
@@ -390,8 +459,11 @@ namespace VoxelRenderEngine.src.Entities
                 playerBox = GetAABB();
             }
 
-            // Check if still grounded
-            if (movement.Y < -0.01f)
+            if (hitGroundThisFrame)
+            {
+                IsGrounded = true;
+            }
+            else if (movement.Y < -0.001f || movement.Y > 0.001f)
             {
                 IsGrounded = false;
             }
@@ -544,6 +616,7 @@ namespace VoxelRenderEngine.src.Entities
                     {
                         // Block Broken!
                         world.SetBlockWorld(bp.X, bp.Y, bp.Z, BlockType.Empty);
+                        world.FluidSystem.OnBlockBroken(world, bp);
                         BlocksBroken++;
                         AudioManager?.PlayBlockBreakSound(def.Type);
 
@@ -760,6 +833,10 @@ namespace VoxelRenderEngine.src.Entities
                                 }
 
                                 world.SetBlockWorld(pb.X, pb.Y, pb.Z, toPlace);
+                                if (toPlace == BlockType.Water || toPlace == BlockType.Lava)
+                                {
+                                    world.FluidSystem.TriggerFlow(world, pb, toPlace);
+                                }
                                 BlocksPlaced++;
                                 AudioManager?.PlayBlockPlaceSound(toPlace);
                                 Inventory.Slots[SelectedHotbarSlot].Count--;
@@ -773,6 +850,118 @@ namespace VoxelRenderEngine.src.Entities
                 }
             }
             rightClickWasDown = rightMouseDown;
+        }
+
+        private void UpdateHealthAndOxygen(World.World world, float deltaTime)
+        {
+            timeSinceLastDamage += deltaTime;
+            if (DamageFlashTimer > 0f)
+            {
+                DamageFlashTimer = MathF.Max(0f, DamageFlashTimer - deltaTime);
+            }
+
+            // 1. DROWNING CHECK (Head/eyes submerged in water)
+            int eyeX = (int)Math.Floor(Position.X);
+            int eyeY = (int)Math.Floor(Position.Y + EyeHeight);
+            int eyeZ = (int)Math.Floor(Position.Z);
+            byte eyeBlock = world.GetBlockWorld(eyeX, eyeY, eyeZ);
+            bool isHeadInWater = (eyeBlock == (byte)BlockType.Water);
+
+            if (isHeadInWater)
+            {
+                // Drain oxygen underwater: 100 to 0 in ~15 seconds (~6.67/s)
+                Oxygen = MathF.Max(0f, Oxygen - 6.67f * deltaTime);
+
+                if (Oxygen <= 0f)
+                {
+                    drownDamageTimer += deltaTime;
+                    if (drownDamageTimer >= 1.0f)
+                    {
+                        drownDamageTimer = 0f;
+                        TakeDamage(10.0f, "drown", world);
+                        AudioManager?.PlayCategorySound("water", volume: 0.8f, pitchVariance: 0.15f);
+                    }
+                }
+                else
+                {
+                    drownDamageTimer = 0f;
+                }
+            }
+            else
+            {
+                // Surfaced: recover oxygen rapidly (full in ~2.5s)
+                Oxygen = MathF.Min(MaxOxygen, Oxygen + 40.0f * deltaTime);
+                drownDamageTimer = 0f;
+            }
+
+            // 2. LAVA CHECK (Feet, body, or head in lava)
+            int footX = (int)Math.Floor(Position.X);
+            int footY = (int)Math.Floor(Position.Y + 0.1f);
+            int footZ = (int)Math.Floor(Position.Z);
+            int bodyY = (int)Math.Floor(Position.Y + 0.9f);
+
+            bool isInLava = (world.GetBlockWorld(footX, footY, footZ) == (byte)BlockType.Lava) ||
+                           (world.GetBlockWorld(footX, bodyY, footZ) == (byte)BlockType.Lava) ||
+                           (eyeBlock == (byte)BlockType.Lava);
+
+            if (isInLava)
+            {
+                lavaDamageTimer += deltaTime;
+                if (lavaDamageTimer >= 0.5f)
+                {
+                    lavaDamageTimer = 0f;
+                    TakeDamage(15.0f, "lava", world);
+                }
+            }
+            else
+            {
+                lavaDamageTimer = 0.45f; // Prime for quick reaction when stepping into lava
+            }
+
+            // 3. PASSIVE HEALING
+            // Only heals after 10 seconds of receiving damage
+            if (Health < MaxHealth && Health > 0f && timeSinceLastDamage >= 10.0f && !isInLava && !isHeadInWater)
+            {
+                Health = MathF.Min(MaxHealth, Health + 6.0f * deltaTime);
+            }
+        }
+
+        public void TakeDamage(float amount, string damageType, World.World world)
+        {
+            if (amount <= 0f || Health <= 0f) return;
+
+            Health = MathF.Max(0f, Health - amount);
+            timeSinceLastDamage = 0f; // Resets the 10-second timer on any damage taken
+            DamageFlashTimer = 0.35f;
+
+            AudioManager?.PlayPlayerHurt();
+
+            if (Health <= 0f)
+            {
+                DieAndRespawn(world);
+            }
+        }
+
+        public void DieAndRespawn(World.World world)
+        {
+            Health = MaxHealth;
+            Oxygen = MaxOxygen;
+            Velocity = Vector3.Zero;
+            IsFlying = false;
+            FallDistance = 0f;
+            timeSinceLastDamage = 10.0f;
+
+            if (IsRiding)
+            {
+                DismountMinecart();
+            }
+
+            // Respawn player safely at world spawn location
+            int spawnX = (int)Math.Floor(SpawnPosition.X);
+            int spawnZ = (int)Math.Floor(SpawnPosition.Z);
+            int spawnY = world.GetSurfaceHeight(spawnX, spawnZ);
+            Position = new Vector3(spawnX + 0.5f, spawnY + 2.5f, spawnZ + 0.5f);
+            UpdateCamera();
         }
     }
 }

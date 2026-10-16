@@ -171,6 +171,10 @@ namespace VoxelRenderEngine.src.World
                             {
                                 chunk.SetBlock(lx, y, lz, BlockType.Sand);
                             }
+                            else if (biome == BiomeType.Mountains && surfaceHeight >= 50)
+                            {
+                                chunk.SetBlock(lx, y, lz, BlockType.SnowyGrass);
+                            }
                             else
                             {
                                 chunk.SetBlock(lx, y, lz, BlockType.Grass);
@@ -178,9 +182,18 @@ namespace VoxelRenderEngine.src.World
                         }
                         else if (y > surfaceHeight - 4)
                         {
-                            if (biome == BiomeType.Desert || (surfaceHeight < SEA_LEVEL + 2 && biome != BiomeType.Mountains))
+                            if (biome == BiomeType.Desert)
                             {
-                                chunk.SetBlock(lx, y, lz, BlockType.Sand);
+                                chunk.SetBlock(lx, y, lz, BlockType.Sandstone);
+                            }
+                            else if (surfaceHeight < SEA_LEVEL + 2 && biome != BiomeType.Mountains)
+                            {
+                                // Clay and sand along beaches
+                                chunk.SetBlock(lx, y, lz, (HashCoordinates(wx, y, wz, seed) % 5 == 0) ? BlockType.Clay : BlockType.Sand);
+                            }
+                            else if (biome == BiomeType.Mountains && surfaceHeight >= 50)
+                            {
+                                chunk.SetBlock(lx, y, lz, BlockType.SnowBlock);
                             }
                             else
                             {
@@ -196,17 +209,45 @@ namespace VoxelRenderEngine.src.World
                             int hash = HashCoordinates(wx, y, wz, seed);
                             int oreRoll = hash % 1000;
 
-                            if (y <= 16 && oreRoll < 12)
+                            if (y <= 12 && oreRoll < 12)
                             {
-                                rockType = BlockType.Obsidian; // Guarantees obsidian at deep levels!
+                                rockType = BlockType.Obsidian;
                             }
-                            else if (y <= 40 && oreRoll < 25)
+                            else if (y <= 14 && oreRoll < 22)
                             {
-                                rockType = BlockType.IronOre;
+                                rockType = BlockType.DiamondOre; // Diamond deep underground
                             }
-                            else if (y <= 60 && oreRoll < 55)
+                            else if (y <= 18 && oreRoll < 42)
                             {
-                                rockType = BlockType.CoalOre;
+                                rockType = BlockType.RedstoneOre; // Redstone near bedrock
+                            }
+                            else if (y <= 32 && oreRoll < 24)
+                            {
+                                rockType = BlockType.GoldOre; // Gold in mid-depths
+                            }
+                            else if (y >= 10 && y <= 34 && oreRoll >= 42 && oreRoll < 58)
+                            {
+                                rockType = BlockType.LapisOre; // Lapis lazuli band
+                            }
+                            else if (y <= 50 && oreRoll < 85)
+                            {
+                                rockType = BlockType.IronOre; // Iron ore
+                            }
+                            else if (y <= 75 && oreRoll < 140)
+                            {
+                                rockType = BlockType.CoalOre; // Coal ore
+                            }
+                            else if (oreRoll >= 880 && oreRoll < 915)
+                            {
+                                rockType = BlockType.Gravel; // Gravel pockets
+                            }
+                            else if (oreRoll >= 915 && oreRoll < 935)
+                            {
+                                rockType = BlockType.Dirt; // Dirt pockets
+                            }
+                            else if (biome == BiomeType.Desert && y > surfaceHeight - 8)
+                            {
+                                rockType = BlockType.Sandstone;
                             }
 
                             chunk.SetBlock(lx, y, lz, rockType);
@@ -229,26 +270,202 @@ namespace VoxelRenderEngine.src.World
                     int wz = originZ + lz;
 
                     BiomeType biome = GetBiome(wx, wz);
-                    if (biome == BiomeType.Desert) continue;
 
-                    int treeChance = (biome == BiomeType.Forest) ? 35 : 180; // Much denser in forests
-
-                    int hash = HashCoordinates(wx, 77, wz, seed + 888);
-                    if (hash % treeChance == 0)
+                    // 1. Desert Decoration (Cactus & Sugar Cane)
+                    if (biome == BiomeType.Desert)
                     {
-                        // Find surface block
+                        int cactusHash = HashCoordinates(wx, 55, wz, seed + 111);
+                        if (cactusHash % 90 == 0)
+                        {
+                            int surfaceY = world.GetSurfaceHeight(wx, wz);
+                            if (world.GetBlockWorld(wx, surfaceY, wz) == (byte)BlockType.Sand)
+                            {
+                                int cactusHeight = 2 + (cactusHash % 2);
+                                for (int cy = 1; cy <= cactusHeight; cy++)
+                                {
+                                    world.SetBlockWorld(wx, surfaceY + cy, wz, BlockType.Cactus);
+                                }
+                            }
+                        }
+                        continue;
+                    }
+
+                    // 2. Tree Generation
+                    int treeChance = (biome == BiomeType.Forest) ? 35 : 160;
+                    int treeHash = HashCoordinates(wx, 77, wz, seed + 888);
+
+                    if (treeHash % treeChance == 0)
+                    {
                         for (int y = Chunk.SIZE_Y - 10; y >= SEA_LEVEL; y--)
                         {
                             byte block = chunk.GetBlock(lx, y, lz);
-                            if (block == (byte)BlockType.Grass)
+                            if (block == (byte)BlockType.Grass || block == (byte)BlockType.SnowyGrass)
                             {
-                                GrowTree(world, wx, y + 1, wz);
+                                if (biome == BiomeType.Mountains)
+                                {
+                                    GrowSpruceTree(world, wx, y + 1, wz);
+                                }
+                                else if (biome == BiomeType.Forest && (treeHash % 3 == 0))
+                                {
+                                    GrowBirchTree(world, wx, y + 1, wz);
+                                }
+                                else
+                                {
+                                    GrowTree(world, wx, y + 1, wz);
+                                }
                                 break;
                             }
+                        }
+                        continue;
+                    }
+
+                    // 3. Surface Flora & Crops (Flowers, Mushrooms, Pumpkins, Sugar Cane)
+                    int floraHash = HashCoordinates(wx, 99, wz, seed + 999);
+                    int surface = world.GetSurfaceHeight(wx, wz);
+                    byte groundBlock = world.GetBlockWorld(wx, surface, wz);
+
+                    if (groundBlock == (byte)BlockType.Grass && world.GetBlockWorld(wx, surface + 1, wz) == (byte)BlockType.Empty)
+                    {
+                        if (floraHash % 45 == 0)
+                        {
+                            // Red Rose or Yellow Dandelion
+                            BlockType flower = (floraHash % 2 == 0) ? BlockType.Rose : BlockType.Dandelion;
+                            world.SetBlockWorld(wx, surface + 1, wz, flower);
+                        }
+                        else if (floraHash % 120 == 0)
+                        {
+                            // Mushrooms in shade
+                            BlockType mushroom = (floraHash % 2 == 0) ? BlockType.RedMushroom : BlockType.BrownMushroom;
+                            world.SetBlockWorld(wx, surface + 1, wz, mushroom);
+                        }
+                        else if (floraHash % 350 == 0)
+                        {
+                            // Pumpkin patch
+                            world.SetBlockWorld(wx, surface + 1, wz, BlockType.Pumpkin);
+                        }
+                    }
+                    else if ((groundBlock == (byte)BlockType.Sand || groundBlock == (byte)BlockType.Dirt) && surface <= SEA_LEVEL + 1)
+                    {
+                        // Sugar cane along water shores
+                        if (floraHash % 70 == 0 && world.GetBlockWorld(wx, surface + 1, wz) == (byte)BlockType.Empty)
+                        {
+                            int caneHeight = 2 + (floraHash % 2);
+                            for (int cy = 1; cy <= caneHeight; cy++)
+                            {
+                                world.SetBlockWorld(wx, surface + cy, wz, BlockType.SugarCane);
+                            }
+                        }
+                    }
+
+                    // 4. Rare Underground Dungeon Spawner Room
+                    int dungeonHash = HashCoordinates(wx, 33, wz, seed + 777);
+                    if (dungeonHash % 900 == 0)
+                    {
+                        int dungeonY = 12 + (dungeonHash % 12); // Deep caves
+                        if (world.GetBlockWorld(wx, dungeonY, wz) == (byte)BlockType.Stone)
+                        {
+                            GenerateDungeonRoom(world, wx, dungeonY, wz);
                         }
                     }
                 }
             }
+        }
+
+        private void GenerateDungeonRoom(World world, int cx, int cy, int cz)
+        {
+            // 5x5 cobblestone & mossy cobblestone dungeon with center monster spawner
+            for (int dx = -2; dx <= 2; dx++)
+            {
+                for (int dz = -2; dz <= 2; dz++)
+                {
+                    for (int dy = 0; dy <= 3; dy++)
+                    {
+                        int x = cx + dx;
+                        int y = cy + dy;
+                        int z = cz + dz;
+
+                        bool isFloor = (dy == 0);
+                        bool isWall = (Math.Abs(dx) == 2 || Math.Abs(dz) == 2);
+                        bool isCeiling = (dy == 3);
+
+                        if (isFloor || isWall || isCeiling)
+                        {
+                            BlockType cobble = ((dx + dz + dy) % 3 == 0) ? BlockType.MossyCobblestone : BlockType.Cobblestone;
+                            world.SetBlockWorld(x, y, z, cobble);
+                        }
+                        else
+                        {
+                            world.SetBlockWorld(x, y, z, BlockType.Empty);
+                        }
+                    }
+                }
+            }
+
+            // Monster spawner in center
+            world.SetBlockWorld(cx, cy + 1, cz, BlockType.MonsterSpawner);
+        }
+
+        private void GrowBirchTree(World world, int wx, int trunkBaseY, int wz)
+        {
+            int trunkHeight = 6;
+            for (int y = 0; y < trunkHeight; y++)
+            {
+                world.SetBlockWorld(wx, trunkBaseY + y, wz, BlockType.BirchLog);
+            }
+
+            int leafBase = trunkBaseY + trunkHeight - 2;
+            for (int dx = -2; dx <= 2; dx++)
+            {
+                for (int dz = -2; dz <= 2; dz++)
+                {
+                    for (int dy = 0; dy <= 2; dy++)
+                    {
+                        if (Math.Abs(dx) == 2 && Math.Abs(dz) == 2 && dy == 2) continue;
+
+                        int leafX = wx + dx;
+                        int leafY = leafBase + dy;
+                        int leafZ = wz + dz;
+
+                        if (world.GetBlockWorld(leafX, leafY, leafZ) == (byte)BlockType.Empty)
+                        {
+                            world.SetBlockWorld(leafX, leafY, leafZ, BlockType.Leaves);
+                        }
+                    }
+                }
+            }
+            world.SetBlockWorld(wx, trunkBaseY + trunkHeight + 1, wz, BlockType.Leaves);
+        }
+
+        private void GrowSpruceTree(World world, int wx, int trunkBaseY, int wz)
+        {
+            int trunkHeight = 7;
+            for (int y = 0; y < trunkHeight; y++)
+            {
+                world.SetBlockWorld(wx, trunkBaseY + y, wz, BlockType.SpruceLog);
+            }
+
+            // Conical pine canopy
+            for (int y = trunkHeight - 4; y <= trunkHeight; y++)
+            {
+                int radius = (y >= trunkHeight - 1) ? 1 : 2;
+                for (int dx = -radius; dx <= radius; dx++)
+                {
+                    for (int dz = -radius; dz <= radius; dz++)
+                    {
+                        if (Math.Abs(dx) == radius && Math.Abs(dz) == radius && y == trunkHeight - 4) continue;
+
+                        int leafX = wx + dx;
+                        int leafY = trunkBaseY + y;
+                        int leafZ = wz + dz;
+
+                        if (world.GetBlockWorld(leafX, leafY, leafZ) == (byte)BlockType.Empty)
+                        {
+                            world.SetBlockWorld(leafX, leafY, leafZ, BlockType.SpruceLeaves);
+                        }
+                    }
+                }
+            }
+            world.SetBlockWorld(wx, trunkBaseY + trunkHeight + 1, wz, BlockType.SpruceLeaves);
         }
 
         private void GrowTree(World world, int wx, int trunkBaseY, int wz)

@@ -1,3 +1,4 @@
+using OpenTK.Graphics.OpenGL;
 using OpenTK.Mathematics;
 using VoxelRenderEngine.src.Graphics;
 
@@ -20,15 +21,18 @@ namespace VoxelRenderEngine.src.World
         public bool IsGeneratingMesh { get; set; } = false;
         public bool IsTerrainGenerated { get; set; } = false;
         public bool IsDecorated { get; set; } = false;
-        public bool HasMesh => indexCount > 0 && chunkVAO != null && ibo != null;
+        public bool HasMesh => (opaqueIndexCount > 0 || waterIndexCount > 0) && chunkVAO != null && ibo != null;
+        public bool HasOpaqueMesh => opaqueIndexCount > 0 && chunkVAO != null && ibo != null;
+        public bool HasWaterMesh => waterIndexCount > 0 && chunkVAO != null && ibo != null;
+        public int OpaqueIndexCount => opaqueIndexCount;
+        public int WaterIndexCount => waterIndexCount;
 
         private VertexArrayObject? chunkVAO;
-        private VertexBufferObject? vertexVBO;
-        private VertexBufferObject? uvVBO;
-        private VertexBufferObject? colorVBO;
-        private VertexBufferObject? normalVBO;
+        private VertexBufferObject? vbo;
         private IndexBufferObject? ibo;
         private int indexCount = 0;
+        private int opaqueIndexCount = 0;
+        private int waterIndexCount = 0;
 
         public Chunk(Vector2i coord)
         {
@@ -69,63 +73,74 @@ namespace VoxelRenderEngine.src.World
             // Clean up old GPU buffers if they exist
             DeleteGLBuffers();
 
-            indexCount = mesh.Indices.Length;
+            indexCount = mesh.IndexCount;
+            opaqueIndexCount = mesh.OpaqueIndexCount;
+            waterIndexCount = mesh.WaterIndexCount;
             if (indexCount == 0) return;
 
             chunkVAO = new VertexArrayObject();
             chunkVAO.Bind();
 
-            vertexVBO = new VertexBufferObject(mesh.Vertices.AsSpan());
-            vertexVBO.Bind();
-            chunkVAO.LinkToVAO(0, 3, vertexVBO);
+            vbo = new VertexBufferObject(mesh.VerticesSpan);
+            vbo.Bind();
 
-            uvVBO = new VertexBufferObject(mesh.UVs.AsSpan());
-            uvVBO.Bind();
-            chunkVAO.LinkToVAO(1, 2, uvVBO);
+            // Link interleaved vertex attributes: Pos (loc 0), UV (loc 1), Color (loc 2), Normal (loc 3)
+            chunkVAO.LinkToVAO(0, 3, ChunkVertex.SizeInBytes, 0);   // Position (vec3)
+            chunkVAO.LinkToVAO(1, 2, ChunkVertex.SizeInBytes, 12);  // TexCoord (vec2)
+            chunkVAO.LinkToVAO(2, 3, ChunkVertex.SizeInBytes, 20);  // Color (vec3)
+            chunkVAO.LinkToVAO(3, 3, ChunkVertex.SizeInBytes, 32);  // Normal (vec3)
 
-            colorVBO = new VertexBufferObject(mesh.Colors.AsSpan());
-            colorVBO.Bind();
-            chunkVAO.LinkToVAO(2, 3, colorVBO);
-
-            normalVBO = new VertexBufferObject(mesh.Normals.AsSpan());
-            normalVBO.Bind();
-            chunkVAO.LinkToVAO(3, 3, normalVBO);
-
-            ibo = new IndexBufferObject(mesh.Indices.AsSpan());
+            ibo = new IndexBufferObject(mesh.IndicesSpan);
 
             IsMeshDirty = false;
         }
 
-        public void Render()
+        public void RenderOpaque()
         {
-            if (indexCount == 0 || chunkVAO == null || ibo == null) return;
+            if (opaqueIndexCount == 0 || chunkVAO == null || ibo == null) return;
 
             chunkVAO.Bind();
             ibo.Bind();
-            OpenTK.Graphics.OpenGL.GL.DrawElements(
-                OpenTK.Graphics.OpenGL.PrimitiveType.Triangles,
-                indexCount,
-                OpenTK.Graphics.OpenGL.DrawElementsType.UnsignedInt,
+            GL.DrawElements(
+                PrimitiveType.Triangles,
+                opaqueIndexCount,
+                DrawElementsType.UnsignedInt,
                 0
             );
+        }
+
+        public void RenderWater()
+        {
+            if (waterIndexCount == 0 || chunkVAO == null || ibo == null) return;
+
+            chunkVAO.Bind();
+            ibo.Bind();
+            GL.DrawElements(
+                PrimitiveType.Triangles,
+                waterIndexCount,
+                DrawElementsType.UnsignedInt,
+                (IntPtr)(opaqueIndexCount * sizeof(uint))
+            );
+        }
+
+        public void Render()
+        {
+            RenderOpaque();
+            RenderWater();
         }
 
         public void DeleteGLBuffers()
         {
             chunkVAO?.Delete();
-            vertexVBO?.Delete();
-            uvVBO?.Delete();
-            colorVBO?.Delete();
-            normalVBO?.Delete();
+            vbo?.Delete();
             ibo?.Delete();
 
             chunkVAO = null;
-            vertexVBO = null;
-            uvVBO = null;
-            colorVBO = null;
-            normalVBO = null;
+            vbo = null;
             ibo = null;
             indexCount = 0;
+            opaqueIndexCount = 0;
+            waterIndexCount = 0;
         }
     }
 }

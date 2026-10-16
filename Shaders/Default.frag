@@ -26,6 +26,7 @@ uniform vec3 pointLightPositions[MAX_POINT_LIGHTS];
 uniform vec3 pointLightColors[MAX_POINT_LIGHTS];
 uniform float pointLightRadii[MAX_POINT_LIGHTS];
 uniform float pointLightIntensities[MAX_POINT_LIGHTS];
+uniform int isTranslucentPass; // 0 = Opaque pass, 1 = Translucent / Water pass
 
 void main()
 {
@@ -73,5 +74,11 @@ void main()
 	float dist = length(fragWorldPos - viewPos);
 	float fogFactor = clamp((dist - fogStart) / (fogEnd - fogStart), 0.0, 1.0);
 
-	FragColor = mix(vec4(litColor, texColor.a), vec4(fogColor, 1.0), fogFactor);
+	float outAlpha = texColor.a;
+	if (isTranslucentPass == 1 && outAlpha >= 0.98)
+	{
+		outAlpha = 0.65; // Crystal-clear translucent water
+	}
+
+	FragColor = mix(vec4(litColor, outAlpha), vec4(fogColor, outAlpha), fogFactor);
 }

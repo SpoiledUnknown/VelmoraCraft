@@ -185,5 +185,104 @@ namespace VoxelRenderEngine.src.World
 
             return false;
         }
+
+        /// <summary>
+        /// Breaks and removes all portal blocks connected to or near the player,
+        /// leaving the obsidian frame structure completely intact.
+        /// </summary>
+        public static int BreakPortalsNearPlayer(World world, Player player)
+        {
+            var aabb = player.GetAABB();
+            int minX = (int)MathF.Floor(aabb.Min.X) - 1;
+            int maxX = (int)MathF.Floor(aabb.Max.X) + 1;
+            int minY = (int)MathF.Floor(aabb.Min.Y) - 1;
+            int maxY = (int)MathF.Floor(aabb.Max.Y) + 1;
+            int minZ = (int)MathF.Floor(aabb.Min.Z) - 1;
+            int maxZ = (int)MathF.Floor(aabb.Max.Z) + 1;
+
+            var startPortalBlocks = new List<Vector3i>();
+
+            for (int x = minX; x <= maxX; x++)
+            {
+                for (int y = minY; y <= maxY; y++)
+                {
+                    for (int z = minZ; z <= maxZ; z++)
+                    {
+                        if (world.GetBlockWorld(x, y, z) == (byte)BlockType.Portal)
+                        {
+                            startPortalBlocks.Add(new Vector3i(x, y, z));
+                        }
+                    }
+                }
+            }
+
+            // Fallback: If player moved slightly outside the bounding box, search in a 3-block radius
+            if (startPortalBlocks.Count == 0)
+            {
+                int px = (int)MathF.Floor(player.Position.X);
+                int py = (int)MathF.Floor(player.Position.Y);
+                int pz = (int)MathF.Floor(player.Position.Z);
+
+                for (int dx = -3; dx <= 3; dx++)
+                {
+                    for (int dy = -3; dy <= 3; dy++)
+                    {
+                        for (int dz = -3; dz <= 3; dz++)
+                        {
+                            if (world.GetBlockWorld(px + dx, py + dy, pz + dz) == (byte)BlockType.Portal)
+                            {
+                                startPortalBlocks.Add(new Vector3i(px + dx, py + dy, pz + dz));
+                            }
+                        }
+                    }
+                }
+            }
+
+            if (startPortalBlocks.Count == 0) return 0;
+
+            // Breadth-first search to find all connected portal blocks
+            var visited = new HashSet<Vector3i>();
+            var queue = new Queue<Vector3i>();
+
+            foreach (var b in startPortalBlocks)
+            {
+                if (visited.Add(b))
+                {
+                    queue.Enqueue(b);
+                }
+            }
+
+            Vector3i[] directions = new Vector3i[]
+            {
+                new Vector3i(1, 0, 0),
+                new Vector3i(-1, 0, 0),
+                new Vector3i(0, 1, 0),
+                new Vector3i(0, -1, 0),
+                new Vector3i(0, 0, 1),
+                new Vector3i(0, 0, -1)
+            };
+
+            while (queue.Count > 0)
+            {
+                var current = queue.Dequeue();
+                foreach (var dir in directions)
+                {
+                    var neighbor = current + dir;
+                    if (!visited.Contains(neighbor) && world.GetBlockWorld(neighbor.X, neighbor.Y, neighbor.Z) == (byte)BlockType.Portal)
+                    {
+                        visited.Add(neighbor);
+                        queue.Enqueue(neighbor);
+                    }
+                }
+            }
+
+            // Replace all portal blocks with Empty (Air), preserving the obsidian frame completely
+            foreach (var pos in visited)
+            {
+                world.SetBlockWorld(pos.X, pos.Y, pos.Z, BlockType.Empty);
+            }
+
+            return visited.Count;
+        }
     }
 }

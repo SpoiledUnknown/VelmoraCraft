@@ -47,8 +47,9 @@ namespace VoxelRenderEngine
         private VictoryScreen? victoryScreen;
         private float totalPlayTime = 0f;
 
-        // Day/Night Cycle
+        // Day/Night Cycle & Sky
         private DayNightCycle? dayNightCycle;
+        private SkyRenderer? skyRenderer;
 
         // Underwater & Under-lava screen tint transition states
         private float currentWaterTint = 0f;
@@ -95,6 +96,10 @@ namespace VoxelRenderEngine
             shaderProgram = new ShaderProgram("Default.vert", "Default.frag");
             texture = new Texture("atlas.png");
 
+            // Initialize Sky & Celestial Renderer (Sun, Moon, Stars, Dynamic Clouds)
+            skyRenderer = new SkyRenderer();
+            skyRenderer.CloudAmount = 0.22f; // Cloud amount: 0.0 (clear sky) to 1.0 (heavy overcast). Edit this variable to easily tune cloudiness!
+
             GL.Enable(EnableCap.DepthTest);
             GL.FrontFace(FrontFaceDirection.Cw);
             GL.Enable(EnableCap.CullFace);
@@ -115,11 +120,27 @@ namespace VoxelRenderEngine
             victoryScreen = new VictoryScreen(uiRenderer);
             victoryScreen.OnContinuePlaying = () =>
             {
+                // Break portal blocks leaving only the obsidian structure
+                if (world != null && player != null)
+                {
+                    int broken = PortalSystem.BreakPortalsNearPlayer(world, player);
+                    if (broken > 0)
+                    {
+                        audioManager?.PlayBlockBreakSound(BlockType.Glass);
+                    }
+                }
+
                 currentScene = SceneState.InGame;
                 CursorState = CursorState.Grabbed;
             };
             victoryScreen.OnSaveAndMainMenu = () =>
             {
+                // Also break the portal before saving so player does not re-trigger victory screen on reload
+                if (world != null && player != null)
+                {
+                    PortalSystem.BreakPortalsNearPlayer(world, player);
+                }
+
                 SaveCurrentWorld();
                 ReturnToMainMenu();
             };
@@ -297,6 +318,7 @@ namespace VoxelRenderEngine
 
         protected override void OnUnload()
         {
+            skyRenderer?.Dispose();
             audioManager?.Dispose();
             uiRenderer?.Delete();
             shaderProgram?.Delete();
@@ -353,6 +375,20 @@ namespace VoxelRenderEngine
 
             GL.ClearColor(skyColor.X, skyColor.Y, skyColor.Z, 1.0f);
             GL.Clear(ClearBufferMask.ColorBufferBit | ClearBufferMask.DepthBufferBit);
+
+            // 1. Render Sky Celestial Bodies (Sun, Moon, Stars) behind the terrain
+            if (skyRenderer != null)
+            {
+                GL.Disable(EnableCap.CullFace);
+                GL.DepthMask(false);
+                GL.Enable(EnableCap.Blend);
+                GL.BlendFunc(BlendingFactor.SrcAlpha, BlendingFactor.OneMinusSrcAlpha);
+
+                skyRenderer.RenderCelestials(activeCam, dayNightCycle);
+
+                GL.DepthMask(true);
+                GL.Enable(EnableCap.CullFace);
+            }
 
             // Transformation matrices
             Matrix4 model = Matrix4.Identity;
@@ -430,8 +466,23 @@ namespace VoxelRenderEngine
             // Render 3D World with directional and distance culling
             world?.Render(shaderProgram, activeCam);
 
-            // Render 2D full-screen underwater or lava tint overlay
-            if (uiRenderer != null && (currentWaterTint > 0.01f || currentLavaTint > 0.01f))
+            // 2. Render Dynamic Voxel Clouds overhead
+            if (skyRenderer != null)
+            {
+                GL.Disable(EnableCap.CullFace);
+                GL.Enable(EnableCap.Blend);
+                GL.BlendFunc(BlendingFactor.SrcAlpha, BlendingFactor.OneMinusSrcAlpha);
+                GL.DepthFunc(DepthFunction.Lequal);
+
+                skyRenderer.RenderClouds(activeCam, dayNightCycle);
+
+                GL.Enable(EnableCap.CullFace);
+                GL.DepthFunc(DepthFunction.Less);
+            }
+
+            // Render 2D full-screen underwater, lava tint, or damage flash overlay
+            float damageFlash = player?.DamageFlashTimer ?? 0f;
+            if (uiRenderer != null && (currentWaterTint > 0.01f || currentLavaTint > 0.01f || damageFlash > 0.01f))
             {
                 uiRenderer.Begin(width, height);
                 if (currentLavaTint > 0.01f)
@@ -443,6 +494,13 @@ namespace VoxelRenderEngine
                 {
                     // Bluish aquatic tint when under water
                     uiRenderer.DrawQuad(0, 0, width, height, new Vector4(0.06f, 0.35f, 0.75f, currentWaterTint));
+                }
+
+                if (damageFlash > 0.01f)
+                {
+                    // Red damage flash when taking damage
+                    float flashAlpha = Math.Clamp(damageFlash * 0.8f, 0f, 0.35f);
+                    uiRenderer.DrawQuad(0, 0, width, height, new Vector4(0.95f, 0.05f, 0.05f, flashAlpha));
                 }
                 uiRenderer.End();
             }
@@ -503,6 +561,9 @@ namespace VoxelRenderEngine
 
             // Dynamic audio update for ambient & day/night music transitions
             audioManager?.Update(dayNightCycle?.CurrentPhase ?? DayNightPhase.Day, dt);
+
+            // Dynamic sky & drifting clouds simulation
+            skyRenderer?.Update(dt);
 
             if (currentScene == SceneState.MainMenu)
             {

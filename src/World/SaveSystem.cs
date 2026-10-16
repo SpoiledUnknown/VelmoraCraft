@@ -24,6 +24,8 @@ namespace VoxelRenderEngine.src.World
         public float PlayerPitch { get; set; }
         public bool PlayerIsFlying { get; set; }
         public int SelectedHotbarSlot { get; set; }
+        public float PlayerHealth { get; set; } = 100.0f;
+        public float PlayerOxygen { get; set; } = 100.0f;
 
         // Statistics
         public int BlocksBroken { get; set; }
@@ -110,6 +112,8 @@ namespace VoxelRenderEngine.src.World
                     PlayerPitch = player.Camera.Pitch,
                     PlayerIsFlying = player.IsFlying,
                     SelectedHotbarSlot = player.SelectedHotbarSlot,
+                    PlayerHealth = player.Health,
+                    PlayerOxygen = player.Oxygen,
                     TotalPlayTime = totalPlayTime,
                     BlocksBroken = blocksBroken,
                     BlocksPlaced = blocksPlaced
@@ -216,6 +220,8 @@ namespace VoxelRenderEngine.src.World
             player.Camera.UpdateVectors();
             player.IsFlying = data.PlayerIsFlying;
             player.SelectedHotbarSlot = Math.Clamp(data.SelectedHotbarSlot, 0, 8);
+            player.Health = (data.PlayerHealth > 0f) ? data.PlayerHealth : player.MaxHealth;
+            player.Oxygen = (data.PlayerOxygen > 0f) ? data.PlayerOxygen : player.MaxOxygen;
             player.Velocity = Vector3.Zero;
 
             // Restore Inventory

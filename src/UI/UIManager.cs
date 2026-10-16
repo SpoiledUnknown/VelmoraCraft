@@ -687,12 +687,25 @@ namespace VoxelRenderEngine.src.UI
             }
 
             // 2. Block Breaking Progress Bar (if breaking a block)
+            float slotSize = 42f;
+            float slotGap = 4f;
+            float totalHotbarW = 9 * slotSize + 8 * slotGap;
+            float pad = 6f;
+            float hx = (screenW - totalHotbarW) * 0.5f;
+            float hy = screenH - slotSize - 16f;
+
+            // Status Sliders: Health and Oxygen (Always visible, side by side just above the hotbar)
+            float sliderGap = 10f;
+            float sliderW = (totalHotbarW - sliderGap) * 0.5f; // ~200px each
+            float sliderH = 14f;
+            float sliderY = hy - sliderH - 10f;
+
             if (player.BreakingProgress > 0.0f)
             {
                 float barW = 140f;
                 float barH = 10f;
                 float barX = (screenW - barW) * 0.5f;
-                float barY = screenH - 96f;
+                float barY = sliderY - 40f;
 
                 Vector4 barBg = new Vector4(0.1f, 0.11f, 0.14f, 0.85f);
                 Vector4 barFill = new Vector4(0.95f, 0.45f, 0.15f, 0.95f); // Fiery orange breaking color
@@ -701,13 +714,6 @@ namespace VoxelRenderEngine.src.UI
             }
 
             // 3. Hotbar at bottom center
-            float slotSize = 42f;
-            float slotGap = 4f;
-            float totalHotbarW = 9 * slotSize + 8 * slotGap;
-            float pad = 6f;
-            float hx = (screenW - totalHotbarW) * 0.5f;
-            float hy = screenH - slotSize - 16f;
-
             // Semi-transparent frosted glass panel behind hotbar
             renderer.DrawPanel(
                 hx - pad,
@@ -730,7 +736,29 @@ namespace VoxelRenderEngine.src.UI
                 renderer.DrawText((i + 1).ToString(), sx + 3f, hy + 3f, 0.9f, new Vector4(0.65f, 0.70f, 0.80f, 0.85f), shadow: true);
             }
 
-            // Display currently selected item name above hotbar
+            // 4. Status Sliders: Health and Oxygen (Always visible, side by side just above the hotbar)
+            // --- Health Slider (Left) ---
+            float hpPct = Math.Clamp(player.Health / player.MaxHealth, 0f, 1f);
+            Vector4 hpBg = new Vector4(0.18f, 0.05f, 0.05f, 0.85f);
+            Vector4 hpFill = (hpPct > 0.30f)
+                ? new Vector4(0.90f, 0.18f, 0.20f, 0.95f) // Vibrant Red
+                : new Vector4(0.98f, 0.10f, 0.10f, 0.98f); // Critical flashing red
+            renderer.DrawProgressBar(hx, sliderY, sliderW, sliderH, hpPct, hpFill, hpBg);
+
+            string hpText = $"HP {(int)MathF.Ceiling(player.Health)}/{(int)player.MaxHealth}";
+            renderer.DrawText(hpText, hx + 6f, sliderY + 2f, 0.85f, new Vector4(1f, 0.95f, 0.95f, 1f), shadow: true);
+
+            // --- Oxygen Slider (Right) ---
+            float oxX = hx + sliderW + sliderGap;
+            float oxPct = Math.Clamp(player.Oxygen / player.MaxOxygen, 0f, 1f);
+            Vector4 oxBg = new Vector4(0.04f, 0.12f, 0.22f, 0.85f);
+            Vector4 oxFill = new Vector4(0.15f, 0.65f, 0.95f, 0.95f); // Deep Cyan/Ocean Blue
+            renderer.DrawProgressBar(oxX, sliderY, sliderW, sliderH, oxPct, oxFill, oxBg);
+
+            string oxText = $"O2 {(int)MathF.Ceiling(player.Oxygen)}%";
+            renderer.DrawText(oxText, oxX + 6f, sliderY + 2f, 0.85f, new Vector4(0.9f, 0.98f, 1f, 1f), shadow: true);
+
+            // Display currently selected item name above status sliders
             var selStack = player.Inventory.Slots[player.SelectedHotbarSlot];
             if (!selStack.IsEmpty)
             {
@@ -738,7 +766,7 @@ namespace VoxelRenderEngine.src.UI
                 string selText = $"{def.Name} ({selStack.Count})";
                 Vector2 textSize = renderer.MeasureText(selText, 1.1f);
                 float textX = (screenW - textSize.X) * 0.5f;
-                renderer.DrawText(selText, textX, hy - 20f, 1.1f, new Vector4(1f, 1f, 1f, 0.9f), shadow: true);
+                renderer.DrawText(selText, textX, sliderY - 20f, 1.1f, new Vector4(1f, 1f, 1f, 0.9f), shadow: true);
             }
         }
 

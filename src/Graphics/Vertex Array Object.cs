@@ -26,6 +26,12 @@ namespace VoxelRenderEngine.src.Graphics
             UnBind();
         }
 
+        public void LinkToVAO(int location, int size, int stride, int offset)
+        {
+            GL.VertexAttribPointer((uint)location, size, VertexAttribPointerType.Float, false, stride, (IntPtr)offset);
+            GL.EnableVertexAttribArray((uint)location);
+        }
+
         public void Bind() { GL.BindVertexArray(ID); }
         private void UnBind() { GL.BindVertexArray(0); }
         public void Delete() { GL.DeleteVertexArray(ID); }

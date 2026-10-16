@@ -44,6 +44,11 @@ namespace VoxelRenderEngine.src.Audio
         {
             InitializeOpenAL();
             DiscoverAudioFiles();
+
+            if (!string.IsNullOrEmpty(AmbientMusicPath))
+            {
+                PlayMusic(AmbientMusicPath, loop: true);
+            }
         }
 
         private unsafe void InitializeOpenAL()
@@ -112,10 +117,40 @@ namespace VoxelRenderEngine.src.Audio
                 foreach (var dir in Directory.GetDirectories(audioDir))
                 {
                     string category = Path.GetFileName(dir).ToLowerInvariant();
-                    var wavFiles = Directory.GetFiles(dir, "*.wav");
-                    if (wavFiles.Length > 0)
+                    var soundFiles = Directory.GetFiles(dir, "*.*")
+                        .Where(f => f.EndsWith(".wav", StringComparison.OrdinalIgnoreCase) || f.EndsWith(".mp3", StringComparison.OrdinalIgnoreCase))
+                        .ToArray();
+                    if (soundFiles.Length > 0)
                     {
-                        soundCategoryFiles[category] = wavFiles;
+                        soundCategoryFiles[category] = soundFiles;
+                    }
+                }
+
+                // Check for bg1 or ambient music in Audio directory root
+                var rootAudioFiles = Directory.GetFiles(audioDir, "*.*")
+                    .Where(f => f.EndsWith(".wav", StringComparison.OrdinalIgnoreCase) || f.EndsWith(".mp3", StringComparison.OrdinalIgnoreCase))
+                    .ToArray();
+
+                var bg1Candidate = rootAudioFiles.FirstOrDefault(f => Path.GetFileNameWithoutExtension(f).Equals("bg1", StringComparison.OrdinalIgnoreCase));
+                if (bg1Candidate != null)
+                {
+                    AmbientMusicPath = bg1Candidate;
+                }
+            }
+
+            // Fallback check in current working directory / Audio if running via dotnet run
+            if (string.IsNullOrEmpty(AmbientMusicPath))
+            {
+                string cwdAudio = Path.Combine(Directory.GetCurrentDirectory(), "Audio");
+                if (Directory.Exists(cwdAudio))
+                {
+                    var cwdFiles = Directory.GetFiles(cwdAudio, "*.*")
+                        .Where(f => f.EndsWith(".wav", StringComparison.OrdinalIgnoreCase) || f.EndsWith(".mp3", StringComparison.OrdinalIgnoreCase))
+                        .ToArray();
+                    var bg1 = cwdFiles.FirstOrDefault(f => Path.GetFileNameWithoutExtension(f).Equals("bg1", StringComparison.OrdinalIgnoreCase));
+                    if (bg1 != null)
+                    {
+                        AmbientMusicPath = bg1;
                     }
                 }
             }
@@ -177,19 +212,37 @@ namespace VoxelRenderEngine.src.Audio
         {
             return blockType switch
             {
-                BlockType.Dirt => "gravel",
-                BlockType.Grass => "grass",
-                BlockType.Stone or BlockType.Cobblestone or BlockType.Bedrock or
-                BlockType.CoalOre or BlockType.IronOre or BlockType.StoneButton or BlockType.StoneButtonPressed => "concrete",
-                BlockType.Sand => "gravel",
-                BlockType.Log or BlockType.Planks or BlockType.DoorLower or
-                BlockType.DoorUpper or BlockType.DoorLowerOpen or BlockType.DoorUpperOpen or
-                BlockType.Chest or BlockType.CraftingTable => "wood",
-                BlockType.Leaves => "grass",
-                BlockType.Glass => "wood",
+                BlockType.Grass or BlockType.Leaves or BlockType.SpruceLeaves or BlockType.Rose or
+                BlockType.Dandelion or BlockType.OakSapling or BlockType.Wheat or BlockType.SugarCane or
+                BlockType.Cactus or BlockType.RedMushroom or BlockType.BrownMushroom => "grass",
+
+                BlockType.Dirt or BlockType.Sand or BlockType.Gravel or BlockType.Clay or
+                BlockType.SoulSand or BlockType.Farmland or BlockType.SnowBlock or BlockType.SnowyGrass or
+                BlockType.WhiteWool or BlockType.OrangeWool or BlockType.MagentaWool or BlockType.LightBlueWool or
+                BlockType.YellowWool or BlockType.LimeWool or BlockType.PinkWool or BlockType.GrayWool or
+                BlockType.LightGrayWool or BlockType.CyanWool or BlockType.PurpleWool or BlockType.BlueWool or
+                BlockType.BrownWool or BlockType.GreenWool or BlockType.RedWool or BlockType.BlackWool => "gravel",
+
+                BlockType.Stone or BlockType.Cobblestone or BlockType.Bedrock or BlockType.CoalOre or
+                BlockType.IronOre or BlockType.GoldOre or BlockType.DiamondOre or BlockType.RedstoneOre or
+                BlockType.LapisOre or BlockType.MossyCobblestone or BlockType.Bricks or BlockType.SmoothStone or
+                BlockType.DoubleStoneSlab or BlockType.Sandstone or BlockType.Netherrack or BlockType.Furnace or
+                BlockType.LitFurnace or BlockType.Dispenser or BlockType.MonsterSpawner or BlockType.Obsidian or
+                BlockType.StoneButton or BlockType.StoneButtonPressed => "concrete",
+
+                BlockType.Log or BlockType.Planks or BlockType.BirchLog or BlockType.SpruceLog or
+                BlockType.DoorLower or BlockType.DoorUpper or BlockType.DoorLowerOpen or BlockType.DoorUpperOpen or
+                BlockType.Chest or BlockType.CraftingTable or BlockType.Bookshelf or BlockType.Jukebox or
+                BlockType.Pumpkin or BlockType.CarvedPumpkin or BlockType.JackOLantern or BlockType.TNT or
+                BlockType.Trapdoor or BlockType.Ladder or BlockType.Cake or BlockType.Sponge or
+                BlockType.Glass or BlockType.Ice => "wood",
+
                 BlockType.Water or BlockType.Portal => "water",
                 BlockType.Lava => "water",
-                BlockType.Rail or BlockType.PoweredRail or BlockType.PoweredRailOn or BlockType.IronIngot => "metal",
+
+                BlockType.Rail or BlockType.PoweredRail or BlockType.PoweredRailOn or BlockType.IronIngot or
+                BlockType.IronBlock or BlockType.GoldBlock or BlockType.DiamondBlock or BlockType.LapisBlock => "metal",
+
                 _ => "gravel"
             };
         }
@@ -222,6 +275,20 @@ namespace VoxelRenderEngine.src.Audio
             PlayCategorySound("concrete", volume: 0.7f);
         }
 
+        public void PlayPlayerHurt()
+        {
+            if (soundCategoryFiles.TryGetValue("player", out var files))
+            {
+                var hurtFile = files.FirstOrDefault(f => f.Contains("Land", StringComparison.OrdinalIgnoreCase));
+                if (hurtFile != null)
+                {
+                    PlaySound(hurtFile, 0.85f, 0.75f);
+                    return;
+                }
+            }
+            PlayCategorySound("concrete", volume: 0.8f, pitchVariance: 0.2f);
+        }
+
         public void PlayPortalIgnite()
         {
             PlayCategorySound("metal", volume: 1.0f, pitchVariance: 0.15f);
@@ -239,7 +306,17 @@ namespace VoxelRenderEngine.src.Audio
 
             string fullPath = ResolveAudioPath(relativeOrFullPath);
             if (!File.Exists(fullPath)) return;
-            if (string.Equals(currentPlayingMusic, fullPath, StringComparison.OrdinalIgnoreCase)) return;
+
+            if (string.Equals(currentPlayingMusic, fullPath, StringComparison.OrdinalIgnoreCase))
+            {
+                // Ensure it is actively playing if it was already selected
+                int state = AL.GetSourcei(musicSource, (SourceGetPNameI)0x1010);
+                if (state != 0x1012) // AL_PLAYING = 0x1012
+                {
+                    AL.SourcePlay(musicSource);
+                }
+                return;
+            }
 
             int buffer = GetOrCreateBuffer(fullPath);
             if (buffer == 0) return;
@@ -264,8 +341,16 @@ namespace VoxelRenderEngine.src.Audio
         {
             if (!isInitialized) return;
 
-            // Check day/night music transitions if paths have been defined by the user
-            if (phase != lastObservedPhase)
+            // Ensure background music (bg1) is playing continuously all the time
+            if (!string.IsNullOrEmpty(AmbientMusicPath))
+            {
+                int state = AL.GetSourcei(musicSource, (SourceGetPNameI)0x1010);
+                if (state != 0x1012) // AL_PLAYING = 0x1012
+                {
+                    PlayMusic(AmbientMusicPath, loop: true);
+                }
+            }
+            else if (phase != lastObservedPhase)
             {
                 lastObservedPhase = phase;
 
@@ -275,20 +360,12 @@ namespace VoxelRenderEngine.src.Audio
                     {
                         PlayMusic(DayMusicPath, loop: true);
                     }
-                    else if (!string.IsNullOrEmpty(AmbientMusicPath) && File.Exists(ResolveAudioPath(AmbientMusicPath)))
-                    {
-                        PlayMusic(AmbientMusicPath, loop: true);
-                    }
                 }
                 else if (phase == DayNightPhase.Night || phase == DayNightPhase.Dusk)
                 {
                     if (!string.IsNullOrEmpty(NightMusicPath) && File.Exists(ResolveAudioPath(NightMusicPath)))
                     {
                         PlayMusic(NightMusicPath, loop: true);
-                    }
-                    else if (!string.IsNullOrEmpty(AmbientMusicPath) && File.Exists(ResolveAudioPath(AmbientMusicPath)))
-                    {
-                        PlayMusic(AmbientMusicPath, loop: true);
                     }
                 }
             }
@@ -307,10 +384,26 @@ namespace VoxelRenderEngine.src.Audio
                 return cached;
             }
 
-            if (!LoadWavFile(filePath, out byte[] audioData, out Format format, out int sampleRate))
+            byte[] audioData;
+            Format format;
+            int sampleRate;
+
+            string ext = Path.GetExtension(filePath).ToLowerInvariant();
+            if (ext == ".mp3")
             {
-                Console.WriteLine($"[Audio] Warning: Failed to decode WAV file '{filePath}'");
-                return 0;
+                if (!LoadMp3File(filePath, out audioData, out format, out sampleRate))
+                {
+                    Console.WriteLine($"[Audio] Warning: Failed to decode MP3 file '{filePath}'");
+                    return 0;
+                }
+            }
+            else
+            {
+                if (!LoadWavFile(filePath, out audioData, out format, out sampleRate))
+                {
+                    Console.WriteLine($"[Audio] Warning: Failed to decode WAV file '{filePath}'");
+                    return 0;
+                }
             }
 
             int buffer = AL.GenBuffer();
@@ -326,6 +419,36 @@ namespace VoxelRenderEngine.src.Audio
             return buffer;
         }
 
+        private static bool LoadMp3File(string filePath, out byte[] audioData, out Format format, out int sampleRate)
+        {
+            audioData = Array.Empty<byte>();
+            format = Format.Stereo16;
+            sampleRate = 44100;
+
+            try
+            {
+                using var mpeg = new NLayer.MpegFile(filePath);
+                sampleRate = mpeg.SampleRate;
+                format = mpeg.Channels == 1 ? Format.Mono16 : Format.Stereo16;
+
+                using var ms = new MemoryStream();
+                byte[] buffer = new byte[16384];
+                int read;
+                while ((read = mpeg.ReadSamplesInt16(buffer, 0, buffer.Length)) > 0)
+                {
+                    ms.Write(buffer, 0, read);
+                }
+
+                audioData = ms.ToArray();
+                return audioData.Length > 0;
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"[Audio] Warning: Failed to decode MP3 file '{filePath}': {ex.Message}");
+                return false;
+            }
+        }
+
         private string ResolveAudioPath(string path)
         {
             if (Path.IsPathRooted(path) && File.Exists(path))
@@ -339,6 +462,12 @@ namespace VoxelRenderEngine.src.Audio
 
             string inAudio = Path.Combine(baseDir, "Audio", path);
             if (File.Exists(inAudio)) return inAudio;
+
+            string inCwd = Path.Combine(Directory.GetCurrentDirectory(), path);
+            if (File.Exists(inCwd)) return inCwd;
+
+            string inCwdAudio = Path.Combine(Directory.GetCurrentDirectory(), "Audio", path);
+            if (File.Exists(inCwdAudio)) return inCwdAudio;
 
             return path;
         }
