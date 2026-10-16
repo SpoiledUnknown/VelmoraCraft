@@ -245,7 +245,7 @@ namespace VoxelRenderEngine.src.UI
         private void HandlePauseMenuClicks(float mx, float my, int screenW, int screenH, bool leftClicked, bool leftDown)
         {
             float panelWidth = 320f;
-            float panelHeight = 400f;
+            float panelHeight = 350f;
             float startX = (screenW - panelWidth) * 0.5f;
             float startY = (screenH - panelHeight) * 0.5f;
 
