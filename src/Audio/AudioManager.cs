@@ -241,7 +241,8 @@ namespace VoxelRenderEngine.src.Audio
                 BlockType.Lava => "water",
 
                 BlockType.Rail or BlockType.PoweredRail or BlockType.PoweredRailOn or BlockType.IronIngot or
-                BlockType.IronBlock or BlockType.GoldBlock or BlockType.DiamondBlock or BlockType.LapisBlock => "metal",
+                BlockType.IronBlock or BlockType.GoldBlock or BlockType.DiamondBlock or BlockType.LapisBlock or
+                BlockType.RedstoneBlock or BlockType.CoalBlock => "metal",
 
                 _ => "gravel"
             };

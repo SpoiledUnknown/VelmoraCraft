@@ -56,6 +56,7 @@ namespace VoxelRenderEngine.src.World
         public int Y { get; set; }
         public int Z { get; set; }
         public byte BlockType { get; set; }
+        public byte Metadata { get; set; } = 0;
     }
 
     public class ChestSaveData
@@ -142,7 +143,8 @@ namespace VoxelRenderEngine.src.World
                         X = kvp.Key.X,
                         Y = kvp.Key.Y,
                         Z = kvp.Key.Z,
-                        BlockType = (byte)kvp.Value
+                        BlockType = (byte)kvp.Value,
+                        Metadata = world.GetBlockMetadata(kvp.Key.X, kvp.Key.Y, kvp.Key.Z)
                     });
                 }
 
@@ -212,8 +214,11 @@ namespace VoxelRenderEngine.src.World
                 dayNight.TimeOfDay = data.TimeOfDay;
             }
 
-            // Restore Player position & rotation
-            player.Position = new Vector3(data.PlayerPosX, data.PlayerPosY, data.PlayerPosZ);
+            // Restore Player position & rotation (spawn slightly above saved point to prevent ground clipping)
+            float safeY = data.PlayerPosY + 0.65f;
+            player.Position = new Vector3(data.PlayerPosX, safeY, data.PlayerPosZ);
+            player.Velocity = Vector3.Zero;
+            player.FallDistance = 0f;
             player.Camera.Position = player.Position + new Vector3(0, player.EyeHeight, 0);
             player.Camera.Yaw = data.PlayerYaw;
             player.Camera.Pitch = data.PlayerPitch;
@@ -222,7 +227,6 @@ namespace VoxelRenderEngine.src.World
             player.SelectedHotbarSlot = Math.Clamp(data.SelectedHotbarSlot, 0, 8);
             player.Health = (data.PlayerHealth > 0f) ? data.PlayerHealth : player.MaxHealth;
             player.Oxygen = (data.PlayerOxygen > 0f) ? data.PlayerOxygen : player.MaxOxygen;
-            player.Velocity = Vector3.Zero;
 
             // Restore Inventory
             player.Inventory.Clear();
@@ -237,7 +241,7 @@ namespace VoxelRenderEngine.src.World
             // Restore Modified Blocks
             foreach (var b in data.ModifiedBlocks)
             {
-                world.SetBlockWorld(b.X, b.Y, b.Z, (BlockType)b.BlockType);
+                world.SetBlockWorld(b.X, b.Y, b.Z, (BlockType)b.BlockType, b.Metadata);
             }
 
             // Restore Chests

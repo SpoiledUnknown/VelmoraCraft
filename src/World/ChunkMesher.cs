@@ -1,5 +1,6 @@
 using OpenTK.Mathematics;
 using VoxelRenderEngine.src.Graphics;
+using VoxelRenderEngine.src.UI;
 
 namespace VoxelRenderEngine.src.World
 {
@@ -72,6 +73,8 @@ namespace VoxelRenderEngine.src.World
             float chunkWorldX = chunk.Position.X;
             float chunkWorldZ = chunk.Position.Z;
 
+            bool hasTranslucent = false;
+
             // PASS 1: Opaque blocks (all solid blocks, terrain, seabed, etc.)
             for (int x = 0; x < Chunk.SIZE_X; x++)
             {
@@ -81,7 +84,11 @@ namespace VoxelRenderEngine.src.World
                     {
                         byte blockId = chunk.GetBlock(x, y, z);
                         if (blockId == (byte)BlockType.Empty) continue;
-                        if (blockId == (byte)BlockType.Water || blockId == (byte)BlockType.Portal) continue;
+                        if (blockId == (byte)BlockType.Water || blockId == (byte)BlockType.Portal)
+                        {
+                            hasTranslucent = true;
+                            continue;
+                        }
 
                         AddBlockMesh(chunk, leftChunk, rightChunk, frontChunk, backChunk, x, y, z, blockId, chunkWorldX, chunkWorldZ, builder);
                     }
@@ -90,17 +97,20 @@ namespace VoxelRenderEngine.src.World
 
             int opaqueIndexCount = builder.Indices.Count;
 
-            // PASS 2: Translucent blocks (Water & Portal)
-            for (int x = 0; x < Chunk.SIZE_X; x++)
+            // PASS 2: Translucent blocks (Water & Portal) - only executed if chunk contains translucent blocks
+            if (hasTranslucent)
             {
-                for (int y = 0; y < Chunk.SIZE_Y; y++)
+                for (int x = 0; x < Chunk.SIZE_X; x++)
                 {
-                    for (int z = 0; z < Chunk.SIZE_Z; z++)
+                    for (int y = 0; y < Chunk.SIZE_Y; y++)
                     {
-                        byte blockId = chunk.GetBlock(x, y, z);
-                        if (blockId != (byte)BlockType.Water && blockId != (byte)BlockType.Portal) continue;
+                        for (int z = 0; z < Chunk.SIZE_Z; z++)
+                        {
+                            byte blockId = chunk.GetBlock(x, y, z);
+                            if (blockId != (byte)BlockType.Water && blockId != (byte)BlockType.Portal) continue;
 
-                        AddBlockMesh(chunk, leftChunk, rightChunk, frontChunk, backChunk, x, y, z, blockId, chunkWorldX, chunkWorldZ, builder);
+                            AddBlockMesh(chunk, leftChunk, rightChunk, frontChunk, backChunk, x, y, z, blockId, chunkWorldX, chunkWorldZ, builder);
+                        }
                     }
                 }
             }
@@ -129,44 +139,56 @@ namespace VoxelRenderEngine.src.World
             float by = y;
             float bz = chunkWorldZ + z;
 
+            if (blockId == (byte)BlockType.Chest)
+            {
+                AddChestMesh(chunk, leftChunk, rightChunk, frontChunk, backChunk, x, y, z, bx, by, bz, blockDef, builder);
+                return;
+            }
+
             if (blockDef.MeshType == MeshType.StandardCube)
             {
+                byte facing = 0;
+                if (BlockRegistry.IsDirectionalBlock((BlockType)blockId))
+                {
+                    facing = chunk.GetMetadata(x, y, z);
+                }
+
                 // 1. Front (+Z)
                 if (ShouldRenderFace(chunk, frontChunk, x, y, z + 1, 0, 1, blockId))
                 {
-                    AddFace(Face.Front, bx, by, bz, blockDef, builder);
+                    AddFace(Face.Front, bx, by, bz, blockDef, builder, facing);
                 }
 
                 // 2. Back (-Z)
                 if (ShouldRenderFace(chunk, backChunk, x, y, z - 1, 0, -1, blockId))
                 {
-                    AddFace(Face.Back, bx, by, bz, blockDef, builder);
+                    AddFace(Face.Back, bx, by, bz, blockDef, builder, facing);
                 }
 
                 // 3. Left (-X)
                 if (ShouldRenderFace(chunk, leftChunk, x - 1, y, z, -1, 0, blockId))
                 {
-                    AddFace(Face.Left, bx, by, bz, blockDef, builder);
+                    AddFace(Face.Left, bx, by, bz, blockDef, builder, facing);
                 }
 
                 // 4. Right (+X)
                 if (ShouldRenderFace(chunk, rightChunk, x + 1, y, z, 1, 0, blockId))
                 {
-                    AddFace(Face.Right, bx, by, bz, blockDef, builder);
+                    AddFace(Face.Right, bx, by, bz, blockDef, builder, facing);
                 }
 
                 // 5. Top (+Y)
                 byte topBlock = y + 1 < Chunk.SIZE_Y ? chunk.GetBlock(x, y + 1, z) : (byte)BlockType.Empty;
                 if ((y + 1 >= Chunk.SIZE_Y || BlockRegistry.IsTransparent(topBlock)) && !(topBlock == blockId && (blockId == (byte)BlockType.Water || blockId == (byte)BlockType.Lava)))
                 {
-                    AddFace(Face.Top, bx, by, bz, blockDef, builder);
+                    AddFace(Face.Top, bx, by, bz, blockDef, builder, facing);
                 }
 
                 // 6. Bottom (-Y)
                 byte bottomBlock = y - 1 >= 0 ? chunk.GetBlock(x, y - 1, z) : (byte)BlockType.Empty;
                 if ((y - 1 < 0 || BlockRegistry.IsTransparent(bottomBlock)) && !(bottomBlock == blockId && (blockId == (byte)BlockType.Water || blockId == (byte)BlockType.Lava)))
                 {
-                    AddFace(Face.Bottom, bx, by, bz, blockDef, builder);
+                    AddFace(Face.Bottom, bx, by, bz, blockDef, builder, facing);
                 }
             }
             else if (blockDef.MeshType == MeshType.CrossQuad)
@@ -175,7 +197,15 @@ namespace VoxelRenderEngine.src.World
             }
             else if (blockDef.MeshType == MeshType.FlatSurface)
             {
-                AddFlatSurface(bx, by, bz, blockDef, builder);
+                if (BlockRegistry.IsRailBlock(blockDef.Type))
+                {
+                    byte meta = chunk.GetMetadata(x, y, z);
+                    AddRailMesh(bx, by, bz, blockDef, meta, builder);
+                }
+                else
+                {
+                    AddFlatSurface(bx, by, bz, blockDef, builder);
+                }
             }
             else if (blockDef.MeshType == MeshType.DoorClosed)
             {
@@ -235,15 +265,308 @@ namespace VoxelRenderEngine.src.World
             return BlockRegistry.IsTransparent(neighborId);
         }
 
+        private static byte GetBlockAt(Chunk current, Chunk? leftChunk, Chunk? rightChunk, Chunk? frontChunk, Chunk? backChunk, int targetX, int targetY, int targetZ)
+        {
+            if (targetY < 0 || targetY >= Chunk.SIZE_Y) return (byte)BlockType.Empty;
+
+            if (targetX >= 0 && targetX < Chunk.SIZE_X && targetZ >= 0 && targetZ < Chunk.SIZE_Z)
+            {
+                return current.GetBlock(targetX, targetY, targetZ);
+            }
+
+            if (targetX < 0 && leftChunk != null && targetZ >= 0 && targetZ < Chunk.SIZE_Z)
+            {
+                return leftChunk.GetBlock(Chunk.SIZE_X + targetX, targetY, targetZ);
+            }
+
+            if (targetX >= Chunk.SIZE_X && rightChunk != null && targetZ >= 0 && targetZ < Chunk.SIZE_Z)
+            {
+                return rightChunk.GetBlock(targetX - Chunk.SIZE_X, targetY, targetZ);
+            }
+
+            if (targetZ < 0 && backChunk != null && targetX >= 0 && targetX < Chunk.SIZE_X)
+            {
+                return backChunk.GetBlock(targetX, targetY, Chunk.SIZE_Z + targetZ);
+            }
+
+            if (targetZ >= Chunk.SIZE_Z && frontChunk != null && targetX >= 0 && targetX < Chunk.SIZE_X)
+            {
+                return frontChunk.GetBlock(targetX, targetY, targetZ - Chunk.SIZE_Z);
+            }
+
+            return (byte)BlockType.Empty;
+        }
+
+        private static byte GetMetadataAt(Chunk current, Chunk? leftChunk, Chunk? rightChunk, Chunk? frontChunk, Chunk? backChunk, int targetX, int targetY, int targetZ)
+        {
+            if (targetY < 0 || targetY >= Chunk.SIZE_Y) return 0;
+
+            if (targetX >= 0 && targetX < Chunk.SIZE_X && targetZ >= 0 && targetZ < Chunk.SIZE_Z)
+            {
+                return current.GetMetadata(targetX, targetY, targetZ);
+            }
+
+            if (targetX < 0 && leftChunk != null && targetZ >= 0 && targetZ < Chunk.SIZE_Z)
+            {
+                return leftChunk.GetMetadata(Chunk.SIZE_X + targetX, targetY, targetZ);
+            }
+
+            if (targetX >= Chunk.SIZE_X && rightChunk != null && targetZ >= 0 && targetZ < Chunk.SIZE_Z)
+            {
+                return rightChunk.GetMetadata(targetX - Chunk.SIZE_X, targetY, targetZ);
+            }
+
+            if (targetZ < 0 && backChunk != null && targetX >= 0 && targetX < Chunk.SIZE_X)
+            {
+                return backChunk.GetMetadata(targetX, targetY, Chunk.SIZE_Z + targetZ);
+            }
+
+            if (targetZ >= Chunk.SIZE_Z && frontChunk != null && targetX >= 0 && targetX < Chunk.SIZE_X)
+            {
+                return frontChunk.GetMetadata(targetX, targetY, targetZ - Chunk.SIZE_Z);
+            }
+
+            return 0;
+        }
+
+        private static void AddChestMesh(
+            Chunk chunk,
+            Chunk? leftChunk,
+            Chunk? rightChunk,
+            Chunk? frontChunk,
+            Chunk? backChunk,
+            int x, int y, int z,
+            float bx, float by, float bz,
+            BlockDefinition blockDef,
+            ChunkMeshBuilder builder)
+        {
+            int worldX = (int)chunk.Position.X + x;
+            int worldY = y;
+            int worldZ = (int)chunk.Position.Z + z;
+
+            bool isDouble = ChestManager.TryGetDoubleChestPartner(
+                new Vector3i(worldX, worldY, worldZ),
+                (qx, qy, qz) =>
+                {
+                    int lx = qx - (int)chunk.Position.X;
+                    int lz = qz - (int)chunk.Position.Z;
+                    return GetBlockAt(chunk, leftChunk, rightChunk, frontChunk, backChunk, lx, qy, lz);
+                },
+                out Vector3i partnerPos,
+                out bool isFirstHalf,
+                out bool isAxisX
+            );
+
+            Vector2 uvFront, uvBack, uvLeft, uvRight, uvTop, uvBottom;
+            Vector2 sideUV = new Vector2(10, 1);
+            Vector2 topBottomUV = new Vector2(9, 1);
+
+            if (!isDouble)
+            {
+                byte facing = chunk.GetMetadata(x, y, z);
+                uvFront = (facing == 0) ? new Vector2(11, 1) : sideUV;
+                uvBack  = (facing == 1) ? new Vector2(11, 1) : sideUV;
+                uvLeft  = (facing == 2) ? new Vector2(11, 1) : sideUV;
+                uvRight = (facing == 3) ? new Vector2(11, 1) : sideUV;
+                uvTop = topBottomUV;
+                uvBottom = topBottomUV;
+            }
+            else
+            {
+                // Always inherit the facing of the first/primary chest for both halves!
+                Vector3i firstPos = isFirstHalf ? new Vector3i(worldX, worldY, worldZ) : partnerPos;
+                int flx = firstPos.X - (int)chunk.Position.X;
+                int flz = firstPos.Z - (int)chunk.Position.Z;
+                byte facing = GetMetadataAt(chunk, leftChunk, rightChunk, frontChunk, backChunk, flx, worldY, flz);
+
+                if (isAxisX)
+                {
+                    if (facing == (byte)BlockFacing.North) // Facing North (-Z)
+                    {
+                        if (isFirstHalf) // Lower X (Right half looking from -Z)
+                        {
+                            uvFront = new Vector2(9, 3);   // Back left
+                            uvBack = new Vector2(10, 2);   // Front right
+                            uvLeft = sideUV;               // Outer side
+                            uvRight = sideUV;              // Inner side (culled)
+                            uvTop = topBottomUV;
+                            uvBottom = topBottomUV;
+                        }
+                        else // Higher X (Left half looking from -Z)
+                        {
+                            uvFront = new Vector2(10, 3);  // Back right
+                            uvBack = new Vector2(9, 2);    // Front left
+                            uvLeft = sideUV;               // Inner side (culled)
+                            uvRight = sideUV;              // Outer side
+                            uvTop = topBottomUV;
+                            uvBottom = topBottomUV;
+                        }
+                    }
+                    else // Facing South (+Z, default)
+                    {
+                        if (isFirstHalf) // Lower X (Left half looking from +Z)
+                        {
+                            uvFront = new Vector2(9, 2);   // Front left
+                            uvBack = new Vector2(10, 3);   // Back left
+                            uvLeft = sideUV;               // Outer side
+                            uvRight = sideUV;              // Inner side (culled)
+                            uvTop = topBottomUV;
+                            uvBottom = topBottomUV;
+                        }
+                        else // Higher X (Right half looking from +Z)
+                        {
+                            uvFront = new Vector2(10, 2);  // Front right
+                            uvBack = new Vector2(9, 3);    // Back right
+                            uvLeft = sideUV;               // Inner side (culled)
+                            uvRight = sideUV;              // Outer side
+                            uvTop = topBottomUV;
+                            uvBottom = topBottomUV;
+                        }
+                    }
+                }
+                else // isAxisZ
+                {
+                    if (facing == (byte)BlockFacing.East) // Facing East (+X)
+                    {
+                        if (isFirstHalf) // Lower Z (Right half looking from +X)
+                        {
+                            uvFront = sideUV;
+                            uvBack = sideUV;
+                            uvLeft = new Vector2(9, 3);    // Back right
+                            uvRight = new Vector2(10, 2);  // Front right
+                            uvTop = topBottomUV;
+                            uvBottom = topBottomUV;
+                        }
+                        else // Higher Z (Left half looking from +X)
+                        {
+                            uvFront = sideUV;
+                            uvBack = sideUV;
+                            uvLeft = new Vector2(10, 3);   // Back left
+                            uvRight = new Vector2(9, 2);   // Front left
+                            uvTop = topBottomUV;
+                            uvBottom = topBottomUV;
+                        }
+                    }
+                    else // Facing West (-X, default)
+                    {
+                        if (isFirstHalf) // Lower Z (Left half looking from -X)
+                        {
+                            uvFront = sideUV;
+                            uvBack = sideUV;
+                            uvLeft = new Vector2(9, 2);    // Front left
+                            uvRight = new Vector2(10, 3);  // Back left
+                            uvTop = topBottomUV;
+                            uvBottom = topBottomUV;
+                        }
+                        else // Higher Z (Right half looking from -X)
+                        {
+                            uvFront = sideUV;
+                            uvBack = sideUV;
+                            uvLeft = new Vector2(10, 2);   // Front right
+                            uvRight = new Vector2(9, 3);   // Back right
+                            uvTop = topBottomUV;
+                            uvBottom = topBottomUV;
+                        }
+                    }
+                }
+            }
+
+            // 1. Front (+Z)
+            if (ShouldRenderFace(chunk, frontChunk, x, y, z + 1, 0, 1, (byte)BlockType.Chest))
+            {
+                AddFaceWithUV(Face.Front, bx, by, bz, uvFront, blockDef.TintColor, builder);
+            }
+
+            // 2. Back (-Z)
+            if (ShouldRenderFace(chunk, backChunk, x, y, z - 1, 0, -1, (byte)BlockType.Chest))
+            {
+                AddFaceWithUV(Face.Back, bx, by, bz, uvBack, blockDef.TintColor, builder);
+            }
+
+            // 3. Left (-X)
+            if (ShouldRenderFace(chunk, leftChunk, x - 1, y, z, -1, 0, (byte)BlockType.Chest))
+            {
+                AddFaceWithUV(Face.Left, bx, by, bz, uvLeft, blockDef.TintColor, builder);
+            }
+
+            // 4. Right (+X)
+            if (ShouldRenderFace(chunk, rightChunk, x + 1, y, z, 1, 0, (byte)BlockType.Chest))
+            {
+                AddFaceWithUV(Face.Right, bx, by, bz, uvRight, blockDef.TintColor, builder);
+            }
+
+            // 5. Top (+Y)
+            byte topBlock = y + 1 < Chunk.SIZE_Y ? chunk.GetBlock(x, y + 1, z) : (byte)BlockType.Empty;
+            if (y + 1 >= Chunk.SIZE_Y || BlockRegistry.IsTransparent(topBlock))
+            {
+                AddFaceWithUV(Face.Top, bx, by, bz, uvTop, blockDef.TintColor, builder);
+            }
+
+            // 6. Bottom (-Y)
+            byte bottomBlock = y - 1 >= 0 ? chunk.GetBlock(x, y - 1, z) : (byte)BlockType.Empty;
+            if (y - 1 < 0 || BlockRegistry.IsTransparent(bottomBlock))
+            {
+                AddFaceWithUV(Face.Bottom, bx, by, bz, uvBottom, blockDef.TintColor, builder);
+            }
+        }
+
         private static void AddFace(
             Face face,
             float x,
             float y,
             float z,
             BlockDefinition def,
+            ChunkMeshBuilder builder,
+            byte facing = 0)
+        {
+            Face texFace = GetOrientedTextureFace(face, facing);
+            AddFaceWithUV(face, x, y, z, def.GetFaceAtlasCoord(texFace), def.TintColor, builder);
+        }
+
+        private static Face GetOrientedTextureFace(Face meshFace, byte facing)
+        {
+            if (facing == 0) return meshFace;
+            if (meshFace == Face.Top || meshFace == Face.Bottom) return meshFace;
+
+            return facing switch
+            {
+                1 => meshFace switch // North (-Z)
+                {
+                    Face.Front => Face.Back,
+                    Face.Back => Face.Front,
+                    Face.Left => Face.Right,
+                    Face.Right => Face.Left,
+                    _ => meshFace
+                },
+                2 => meshFace switch // West (-X)
+                {
+                    Face.Front => Face.Right,
+                    Face.Back => Face.Left,
+                    Face.Left => Face.Front,
+                    Face.Right => Face.Back,
+                    _ => meshFace
+                },
+                3 => meshFace switch // East (+X)
+                {
+                    Face.Front => Face.Left,
+                    Face.Back => Face.Right,
+                    Face.Left => Face.Back,
+                    Face.Right => Face.Front,
+                    _ => meshFace
+                },
+                _ => meshFace
+            };
+        }
+
+        private static void AddFaceWithUV(
+            Face face,
+            float x,
+            float y,
+            float z,
+            Vector2 atlasCoord,
+            Vector3 tint,
             ChunkMeshBuilder builder)
         {
-            Vector3 tint = def.TintColor;
             Vector3 normal = face switch
             {
                 Face.Front => new Vector3(0, 0, 1),
@@ -308,7 +631,6 @@ namespace VoxelRenderEngine.src.World
                     break;
             }
 
-            Vector2 atlasCoord = def.GetFaceAtlasCoord(face);
             float u0 = atlasCoord.X / ATLAS_SIZE;
             float u1 = (atlasCoord.X + 1f) / ATLAS_SIZE;
             float v0 = 1.0f - ((atlasCoord.Y + 1f) / ATLAS_SIZE); // bottom of tile
@@ -363,6 +685,58 @@ namespace VoxelRenderEngine.src.World
                 uv, tint, new Vector3(0.7f, 0, 0.7f),
                 builder
             );
+        }
+
+        private static void AddRailMesh(
+            float bx, float by, float bz, BlockDefinition def, byte shape,
+            ChunkMeshBuilder builder)
+        {
+            Vector2 uv = def.GetFaceAtlasCoord(Face.Front);
+            Vector3 tint = def.TintColor;
+            float y = by - 0.47f; // Just 0.03 above ground block top
+
+            // If it's a standard rail and curved shape (>= 2), use the curved rail texture tile (0, 7)
+            if (def.Type == BlockType.Rail && shape >= 2)
+            {
+                uv = new Vector2(0, 7);
+            }
+
+            Vector3 pNW = new Vector3(bx - 0.5f, y, bz - 0.5f);
+            Vector3 pNE = new Vector3(bx + 0.5f, y, bz - 0.5f);
+            Vector3 pSE = new Vector3(bx + 0.5f, y, bz + 0.5f);
+            Vector3 pSW = new Vector3(bx - 0.5f, y, bz + 0.5f);
+
+            Vector3 v0, v1, v2, v3;
+
+            switch (shape)
+            {
+                case 1: // EastWest (straight rail running along X axis)
+                    v0 = pSW; v1 = pNW; v2 = pNE; v3 = pSE;
+                    break;
+
+                case 2: // SouthEast curve (connecting +Z South and +X East)
+                    v0 = pNW; v1 = pNE; v2 = pSE; v3 = pSW;
+                    break;
+
+                case 3: // SouthWest curve (connecting +Z South and -X West)
+                    v0 = pNE; v1 = pSE; v2 = pSW; v3 = pNW;
+                    break;
+
+                case 4: // NorthWest curve (connecting -Z North and -X West)
+                    v0 = pSE; v1 = pSW; v2 = pNW; v3 = pNE;
+                    break;
+
+                case 5: // NorthEast curve (connecting -Z North and +X East)
+                    v0 = pSW; v1 = pNW; v2 = pNE; v3 = pSE;
+                    break;
+
+                case 0: // NorthSouth (straight rail running along Z axis)
+                default:
+                    v0 = pNW; v1 = pNE; v2 = pSE; v3 = pSW;
+                    break;
+            }
+
+            AddDoubleSidedQuad(v0, v1, v2, v3, uv, tint, Vector3.UnitY, builder);
         }
 
         private static void AddFlatSurface(

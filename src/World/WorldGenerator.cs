@@ -278,12 +278,50 @@ namespace VoxelRenderEngine.src.World
                         if (cactusHash % 90 == 0)
                         {
                             int surfaceY = world.GetSurfaceHeight(wx, wz);
-                            if (world.GetBlockWorld(wx, surfaceY, wz) == (byte)BlockType.Sand)
+                            // Must be on dry ground above sea level
+                            if (surfaceY > SEA_LEVEL && world.GetBlockWorld(wx, surfaceY, wz) == (byte)BlockType.Sand)
                             {
                                 int cactusHeight = 2 + (cactusHash % 2);
-                                for (int cy = 1; cy <= cactusHeight; cy++)
+                                bool canPlace = true;
+
+                                // Base sand block cannot be directly touching liquid
+                                if (IsLiquid(world.GetBlockWorld(wx + 1, surfaceY, wz)) ||
+                                    IsLiquid(world.GetBlockWorld(wx - 1, surfaceY, wz)) ||
+                                    IsLiquid(world.GetBlockWorld(wx, surfaceY, wz + 1)) ||
+                                    IsLiquid(world.GetBlockWorld(wx, surfaceY, wz - 1)))
                                 {
-                                    world.SetBlockWorld(wx, surfaceY + cy, wz, BlockType.Cactus);
+                                    canPlace = false;
+                                }
+
+                                if (canPlace)
+                                {
+                                    for (int cy = 1; cy <= cactusHeight; cy++)
+                                    {
+                                        int py = surfaceY + cy;
+                                        if (py >= Chunk.SIZE_Y || world.GetBlockWorld(wx, py, wz) != (byte)BlockType.Empty)
+                                        {
+                                            canPlace = false;
+                                            break;
+                                        }
+
+                                        // Cacti cannot grow in or adjacent to water, lava, or solid blocks
+                                        if (IsInvalidCactusNeighbor(world.GetBlockWorld(wx + 1, py, wz)) ||
+                                            IsInvalidCactusNeighbor(world.GetBlockWorld(wx - 1, py, wz)) ||
+                                            IsInvalidCactusNeighbor(world.GetBlockWorld(wx, py, wz + 1)) ||
+                                            IsInvalidCactusNeighbor(world.GetBlockWorld(wx, py, wz - 1)))
+                                        {
+                                            canPlace = false;
+                                            break;
+                                        }
+                                    }
+                                }
+
+                                if (canPlace)
+                                {
+                                    for (int cy = 1; cy <= cactusHeight; cy++)
+                                    {
+                                        world.SetBlockWorld(wx, surfaceY + cy, wz, BlockType.Cactus);
+                                    }
                                 }
                             }
                         }
@@ -460,12 +498,12 @@ namespace VoxelRenderEngine.src.World
 
                         if (world.GetBlockWorld(leafX, leafY, leafZ) == (byte)BlockType.Empty)
                         {
-                            world.SetBlockWorld(leafX, leafY, leafZ, BlockType.SpruceLeaves);
+                            world.SetBlockWorld(leafX, leafY, leafZ, BlockType.Leaves);
                         }
                     }
                 }
             }
-            world.SetBlockWorld(wx, trunkBaseY + trunkHeight + 1, wz, BlockType.SpruceLeaves);
+            world.SetBlockWorld(wx, trunkBaseY + trunkHeight + 1, wz, BlockType.Leaves);
         }
 
         private void GrowTree(World world, int wx, int trunkBaseY, int wz)
@@ -503,6 +541,16 @@ namespace VoxelRenderEngine.src.World
 
             // Top leaf crown
             world.SetBlockWorld(wx, trunkBaseY + trunkHeight + 1, wz, BlockType.Leaves);
+        }
+
+        private static bool IsLiquid(byte block)
+        {
+            return block == (byte)BlockType.Water || block == (byte)BlockType.Lava;
+        }
+
+        private static bool IsInvalidCactusNeighbor(byte block)
+        {
+            return block == (byte)BlockType.Water || block == (byte)BlockType.Lava || BlockRegistry.IsSolid(block);
         }
 
         private static int HashCoordinates(int x, int y, int z, int seed)

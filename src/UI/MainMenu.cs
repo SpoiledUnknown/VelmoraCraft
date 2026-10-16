@@ -242,21 +242,15 @@ namespace VoxelRenderEngine.src.UI
                 return;
             }
 
-            // 4. Quick preset buttons for chunk size: 16, 32, 64
+            // 4. Quick preset buttons for chunk size: 32, 64, 256
             float preBtnW = 65f;
             float preBtnH = 36f;
-            float preBtn16X = sizeX + sizeW + 20f;
-            float preBtn32X = preBtn16X + preBtnW + 12f;
+            float preBtn32X = sizeX + sizeW + 20f;
             float preBtn64X = preBtn32X + preBtnW + 12f;
+            float preBtn256X = preBtn64X + preBtnW + 12f;
 
             if (my >= sizeY && my <= sizeY + preBtnH)
             {
-                if (mx >= preBtn16X && mx <= preBtn16X + preBtnW)
-                {
-                    worldSizeInput = "16";
-                    activeField = ModalField.WorldSize;
-                    return;
-                }
                 if (mx >= preBtn32X && mx <= preBtn32X + preBtnW)
                 {
                     worldSizeInput = "32";
@@ -266,6 +260,12 @@ namespace VoxelRenderEngine.src.UI
                 if (mx >= preBtn64X && mx <= preBtn64X + preBtnW)
                 {
                     worldSizeInput = "64";
+                    activeField = ModalField.WorldSize;
+                    return;
+                }
+                if (mx >= preBtn256X && mx <= preBtn256X + preBtnW)
+                {
+                    worldSizeInput = "256";
                     activeField = ModalField.WorldSize;
                     return;
                 }
@@ -528,16 +528,16 @@ namespace VoxelRenderEngine.src.UI
             string displaySize = worldSizeInput + (isSizeFocused && cursorVisible ? "|" : "");
             renderer.DrawText(displaySize, sizeBoxX + 10f, sizeBoxY + 10f, 1.25f, Vector4.One, shadow: false);
 
-            // Quick preset buttons: 16, 32, 64
+            // Quick preset buttons: 32, 64, 256
             float preBtnW = 65f;
             float preBtnH = 36f;
-            float preBtn16X = sizeBoxX + sizeBoxW + 20f;
-            float preBtn32X = preBtn16X + preBtnW + 12f;
+            float preBtn32X = sizeBoxX + sizeBoxW + 20f;
             float preBtn64X = preBtn32X + preBtnW + 12f;
+            float preBtn256X = preBtn64X + preBtnW + 12f;
 
-            RenderButton("16", preBtn16X, sizeBoxY, preBtnW, preBtnH, mousePos);
             RenderButton("32", preBtn32X, sizeBoxY, preBtnW, preBtnH, mousePos);
             RenderButton("64", preBtn64X, sizeBoxY, preBtnW, preBtnH, mousePos);
+            RenderButton("256", preBtn256X, sizeBoxY, preBtnW, preBtnH, mousePos);
 
             // Calculated size summary
             int.TryParse(worldSizeInput, out int currentSize);

@@ -49,13 +49,15 @@ void main()
 	// Dynamic Point Lights (Placed Torches, Lava, Handheld Torch)
 	for (int i = 0; i < numPointLights; i++)
 	{
-		float pDist = length(pointLightPositions[i] - fragWorldPos);
+		vec3 toLight = pointLightPositions[i] - fragWorldPos;
+		float distSq = dot(toLight, toLight);
 		float pRad = pointLightRadii[i];
-		if (pDist < pRad)
+		if (distSq < pRad * pRad)
 		{
-			float atten = clamp(1.0 - (pDist / pRad), 0.0, 1.0);
+			float pDist = sqrt(distSq);
+			float atten = 1.0 - (pDist / pRad);
 			atten = atten * atten; // Smooth quadratic falloff
-			vec3 lightToFrag = normalize(pointLightPositions[i] - fragWorldPos);
+			vec3 lightToFrag = toLight / max(pDist, 0.001);
 			float nDotL = max(dot(norm, lightToFrag), 0.35); // Wrap-around diffuse
 			totalLight += pointLightColors[i] * (nDotL * atten * pointLightIntensities[i]);
 		}

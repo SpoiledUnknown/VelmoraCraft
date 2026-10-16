@@ -8,7 +8,9 @@ namespace VoxelRenderEngine.src.UI
     public enum UIState
     {
         HUD,
-        InventoryAndCrafting,
+        PersonalInventory,
+        CraftingTable,
+        Furnace,
         Chest,
         Paused
     }
@@ -36,10 +38,19 @@ namespace VoxelRenderEngine.src.UI
 
         public void ShowSaveNotification() => saveNotificationTimer = 2.5f;
 
-        // Player & chest references
+        // Player, world, chest & station references
         private Player? player;
+        private World.World? world;
         private Inventory? currentChestInventory;
         private Vector3i? currentChestPos;
+        private Vector3i? currentFurnacePos;
+
+        // Render Distance Slider & Anti-Aliasing settings
+        private int renderDistanceChunks = 8;
+        private bool isDraggingRenderDistanceSlider = false;
+        public int RenderDistanceChunks => renderDistanceChunks;
+        public bool IsAntiAliasingEnabled { get; set; } = false;
+        public Action<bool>? OnAntiAliasingToggled { get; set; }
 
         // Held item for drag & drop
         public ItemStack HeldItem = ItemStack.Empty;
@@ -50,6 +61,12 @@ namespace VoxelRenderEngine.src.UI
 
         // Hover tracking
         private string? hoveredTooltip = null;
+
+        // FPS Counter tracking
+        private long lastFpsTimestamp = 0;
+        private int fpsFrameCounter = 0;
+        private int cachedFpsValue = 60;
+        private string cachedFpsString = "FPS: 60";
 
         // Key states for debouncing
         private bool eKeyWasDown = false;
@@ -68,11 +85,44 @@ namespace VoxelRenderEngine.src.UI
             this.player = player;
         }
 
+        public void SetWorld(World.World? world)
+        {
+            this.world = world;
+            if (world != null)
+            {
+                renderDistanceChunks = world.ViewDistanceChunks;
+            }
+        }
+
+        public void SetRenderDistance(int chunks)
+        {
+            renderDistanceChunks = Math.Clamp(chunks, 2, 16);
+            if (world != null)
+            {
+                world.ViewDistanceChunks = renderDistanceChunks;
+            }
+        }
+
         public void OpenChest(Vector3i blockPos, Inventory chestInventory)
         {
             currentChestPos = blockPos;
             currentChestInventory = chestInventory;
             CurrentState = UIState.Chest;
+        }
+
+        public void OpenCraftingTable()
+        {
+            activeCategory = RecipeCategory.All;
+            recipeScrollOffset = 0;
+            CurrentState = UIState.CraftingTable;
+        }
+
+        public void OpenFurnace(Vector3i blockPos)
+        {
+            currentFurnacePos = blockPos;
+            activeCategory = RecipeCategory.Smelting;
+            recipeScrollOffset = 0;
+            CurrentState = UIState.Furnace;
         }
 
         public void CloseUI()
@@ -87,8 +137,14 @@ namespace VoxelRenderEngine.src.UI
                 HeldItem = ItemStack.Empty;
             }
 
+            if (currentChestInventory is DoubleChestInventory doubleChest)
+            {
+                doubleChest.SyncToChests();
+            }
+
             currentChestInventory = null;
             currentChestPos = null;
+            currentFurnacePos = null;
             CurrentState = UIState.HUD;
         }
 
@@ -106,7 +162,9 @@ namespace VoxelRenderEngine.src.UI
             {
                 if (CurrentState == UIState.HUD)
                 {
-                    CurrentState = UIState.InventoryAndCrafting;
+                    activeCategory = RecipeCategory.All;
+                    recipeScrollOffset = 0;
+                    CurrentState = UIState.PersonalInventory;
                 }
                 else
                 {
@@ -149,7 +207,7 @@ namespace VoxelRenderEngine.src.UI
                 if (newSlot > 8) newSlot = 0;
                 player.SelectedHotbarSlot = newSlot;
             }
-            else if (CurrentState == UIState.InventoryAndCrafting)
+            else if (CurrentState == UIState.PersonalInventory || CurrentState == UIState.CraftingTable || CurrentState == UIState.Furnace)
             {
                 recipeScrollOffset -= (int)MathF.Sign(scrollDelta);
                 if (recipeScrollOffset < 0) recipeScrollOffset = 0;
@@ -172,7 +230,7 @@ namespace VoxelRenderEngine.src.UI
             float mx = mousePos.X;
             float my = mousePos.Y;
 
-            if (CurrentState == UIState.InventoryAndCrafting)
+            if (CurrentState == UIState.PersonalInventory || CurrentState == UIState.CraftingTable || CurrentState == UIState.Furnace)
             {
                 HandleInventoryAndCraftingClicks(mx, my, screenW, screenH, leftClicked, rightClicked, shiftHeld);
             }
@@ -182,34 +240,33 @@ namespace VoxelRenderEngine.src.UI
             }
             else if (CurrentState == UIState.Paused)
             {
-                HandlePauseMenuClicks(mx, my, screenW, screenH, leftClicked);
+                HandlePauseMenuClicks(mx, my, screenW, screenH, leftClicked, leftDown);
             }
         }
 
-        private void HandlePauseMenuClicks(float mx, float my, int screenW, int screenH, bool leftClicked)
+        private void HandlePauseMenuClicks(float mx, float my, int screenW, int screenH, bool leftClicked, bool leftDown)
         {
-            if (!leftClicked) return;
-
             float panelWidth = 320f;
-            float panelHeight = 350f;
+            float panelHeight = 400f;
             float startX = (screenW - panelWidth) * 0.5f;
             float startY = (screenH - panelHeight) * 0.5f;
 
             float btnW = 240f;
-            float btnH = 38f;
+            float btnH = 34f;
+            float btnSpacing = 8f;
             float btnX = startX + (panelWidth - btnW) * 0.5f;
 
             // 1. Resume Game
             float btn1Y = startY + 54f;
-            if (mx >= btnX && mx <= btnX + btnW && my >= btn1Y && my <= btn1Y + btnH)
+            if (leftClicked && mx >= btnX && mx <= btnX + btnW && my >= btn1Y && my <= btn1Y + btnH)
             {
                 CloseUI();
                 return;
             }
 
             // 2. Save Game
-            float btn2Y = btn1Y + btnH + 8f;
-            if (mx >= btnX && mx <= btnX + btnW && my >= btn2Y && my <= btn2Y + btnH)
+            float btn2Y = btn1Y + btnH + btnSpacing;
+            if (leftClicked && mx >= btnX && mx <= btnX + btnW && my >= btn2Y && my <= btn2Y + btnH)
             {
                 OnSaveGameRequested?.Invoke();
                 ShowSaveNotification();
@@ -217,8 +274,8 @@ namespace VoxelRenderEngine.src.UI
             }
 
             // 3. Save & Main Menu
-            float btn3Y = btn2Y + btnH + 8f;
-            if (mx >= btnX && mx <= btnX + btnW && my >= btn3Y && my <= btn3Y + btnH)
+            float btn3Y = btn2Y + btnH + btnSpacing;
+            if (leftClicked && mx >= btnX && mx <= btnX + btnW && my >= btn3Y && my <= btn3Y + btnH)
             {
                 OnSaveGameRequested?.Invoke();
                 CloseUI();
@@ -227,8 +284,8 @@ namespace VoxelRenderEngine.src.UI
             }
 
             // 4. Toggle Fly Mode
-            float btn4Y = btn3Y + btnH + 8f;
-            if (mx >= btnX && mx <= btnX + btnW && my >= btn4Y && my <= btn4Y + btnH)
+            float btn4Y = btn3Y + btnH + btnSpacing;
+            if (leftClicked && mx >= btnX && mx <= btnX + btnW && my >= btn4Y && my <= btn4Y + btnH)
             {
                 if (player != null)
                 {
@@ -238,9 +295,42 @@ namespace VoxelRenderEngine.src.UI
                 return;
             }
 
-            // 5. Quit to Desktop
-            float btn5Y = btn4Y + btnH + 8f;
-            if (mx >= btnX && mx <= btnX + btnW && my >= btn5Y && my <= btn5Y + btnH)
+            // 5. Anti-Aliasing (Toggle)
+            float btn5Y = btn4Y + btnH + btnSpacing;
+            if (leftClicked && mx >= btnX && mx <= btnX + btnW && my >= btn5Y && my <= btn5Y + btnH)
+            {
+                IsAntiAliasingEnabled = !IsAntiAliasingEnabled;
+                OnAntiAliasingToggled?.Invoke(IsAntiAliasingEnabled);
+                return;
+            }
+
+            // 6. Render Distance Slider (2 to 16 chunks)
+            float sliderY = btn5Y + btnH + btnSpacing + 2f;
+            float trackX = btnX;
+            float trackY = sliderY + 18f;
+            float trackW = btnW;
+            float trackH = 10f;
+
+            if (leftClicked && mx >= trackX - 8f && mx <= trackX + trackW + 8f && my >= sliderY && my <= trackY + trackH + 10f)
+            {
+                isDraggingRenderDistanceSlider = true;
+            }
+
+            if (!leftDown)
+            {
+                isDraggingRenderDistanceSlider = false;
+            }
+
+            if (isDraggingRenderDistanceSlider && leftDown)
+            {
+                float pct = Math.Clamp((mx - trackX) / trackW, 0f, 1f);
+                int chunks = 2 + (int)MathF.Round(pct * 14f);
+                SetRenderDistance(chunks);
+            }
+
+            // 7. Quit to Desktop
+            float btn6Y = sliderY + 42f;
+            if (leftClicked && mx >= btnX && mx <= btnX + btnW && my >= btn6Y && my <= btn6Y + btnH)
             {
                 OnSaveGameRequested?.Invoke();
                 OnQuitRequested?.Invoke();
@@ -280,7 +370,7 @@ namespace VoxelRenderEngine.src.UI
             float tabH = 24f;
             float tabW = 90f;
 
-            if (leftClicked)
+            if (leftClicked && CurrentState == UIState.CraftingTable)
             {
                 // Tab: All
                 if (mx >= leftPanelX + 14f && mx <= leftPanelX + 14f + tabW && my >= tabY && my <= tabY + tabH)
@@ -288,16 +378,10 @@ namespace VoxelRenderEngine.src.UI
                     activeCategory = RecipeCategory.All;
                     recipeScrollOffset = 0;
                 }
-                // Tab: Crafting
+                // Tab: Workbench
                 else if (mx >= leftPanelX + 14f + tabW + 6f && mx <= leftPanelX + 14f + (tabW + 6f) * 2 && my >= tabY && my <= tabY + tabH)
                 {
                     activeCategory = RecipeCategory.Crafting;
-                    recipeScrollOffset = 0;
-                }
-                // Tab: Smelting
-                else if (mx >= leftPanelX + 14f + (tabW + 6f) * 2 && mx <= leftPanelX + 14f + (tabW + 6f) * 3 && my >= tabY && my <= tabY + tabH)
-                {
-                    activeCategory = RecipeCategory.Smelting;
                     recipeScrollOffset = 0;
                 }
             }
@@ -376,8 +460,9 @@ namespace VoxelRenderEngine.src.UI
         {
             if (player == null || currentChestInventory == null) return;
 
+            int chestRows = currentChestInventory.SlotCount > 18 ? 4 : 2;
             float panelWidth = 430f;
-            float panelHeight = 420f;
+            float panelHeight = (chestRows == 4) ? 500f : 420f;
             float startX = (screenW - panelWidth) * 0.5f;
             float startY = (screenH - panelHeight) * 0.5f;
 
@@ -394,9 +479,9 @@ namespace VoxelRenderEngine.src.UI
             float slotGap = 4f;
             float invStartX = startX + (panelWidth - (9 * slotSize + 8 * slotGap)) * 0.5f;
 
-            // 1. Chest Slots (18 slots = 2 rows of 9)
+            // 1. Chest Slots
             float chestStartY = startY + 40f;
-            for (int row = 0; row < 2; row++)
+            for (int row = 0; row < chestRows; row++)
             {
                 for (int col = 0; col < 9; col++)
                 {
@@ -422,13 +507,18 @@ namespace VoxelRenderEngine.src.UI
                         {
                             HandleSlotClickDirect(currentChestInventory, slotIndex, leftClicked, rightClicked);
                         }
+
+                        if (currentChestInventory is DoubleChestInventory doubleChest)
+                        {
+                            doubleChest.SyncToChests();
+                        }
                         return;
                     }
                 }
             }
 
             // 2. Player Inventory (Main 27 + Hotbar 9)
-            float playerInvStartY = chestStartY + 2 * (slotSize + slotGap) + 36f;
+            float playerInvStartY = chestStartY + chestRows * (slotSize + slotGap) + 36f;
 
             // Main (slots 9 to 35)
             for (int row = 0; row < 3; row++)
@@ -456,6 +546,11 @@ namespace VoxelRenderEngine.src.UI
                         else
                         {
                             HandleSlotClickDirect(player.Inventory, slotIndex, leftClicked, rightClicked);
+                        }
+
+                        if (currentChestInventory is DoubleChestInventory doubleChest)
+                        {
+                            doubleChest.SyncToChests();
                         }
                         return;
                     }
@@ -486,6 +581,11 @@ namespace VoxelRenderEngine.src.UI
                     else
                     {
                         HandleSlotClickDirect(player.Inventory, slotIndex, leftClicked, rightClicked);
+                    }
+
+                    if (currentChestInventory is DoubleChestInventory doubleChest)
+                    {
+                        doubleChest.SyncToChests();
                     }
                     return;
                 }
@@ -606,12 +706,29 @@ namespace VoxelRenderEngine.src.UI
 
         private List<CraftingRecipe> GetFilteredRecipes()
         {
-            return activeCategory switch
+            if (CurrentState == UIState.PersonalInventory)
             {
-                RecipeCategory.Crafting => RecipeRegistry.Recipes.Where(r => !r.IsSmelting).ToList(),
-                RecipeCategory.Smelting => RecipeRegistry.Recipes.Where(r => r.IsSmelting).ToList(),
-                _ => RecipeRegistry.Recipes
-            };
+                // Only basic 2x2 survival recipes (no workbench required, no smelting)
+                return RecipeRegistry.Recipes.Where(r => r.Station == RecipeStation.Personal).ToList();
+            }
+            else if (CurrentState == UIState.Furnace)
+            {
+                // Only furnace smelting recipes
+                return RecipeRegistry.Recipes.Where(r => r.Station == RecipeStation.Furnace).ToList();
+            }
+            else if (CurrentState == UIState.CraftingTable)
+            {
+                // Workbench 3x3: All crafting recipes (Personal + CraftingTable), absolutely NO furnace smelting
+                var workbenchRecipes = RecipeRegistry.Recipes.Where(r => r.Station != RecipeStation.Furnace);
+                return activeCategory switch
+                {
+                    RecipeCategory.Crafting => workbenchRecipes.Where(r => r.Station == RecipeStation.CraftingTable).ToList(),
+                    RecipeCategory.Smelting => new List<CraftingRecipe>(),
+                    _ => workbenchRecipes.ToList()
+                };
+            }
+
+            return RecipeRegistry.Recipes;
         }
 
         // ==========================================
@@ -630,7 +747,9 @@ namespace VoxelRenderEngine.src.UI
                     RenderHUD(screenWidth, screenHeight);
                     break;
 
-                case UIState.InventoryAndCrafting:
+                case UIState.PersonalInventory:
+                case UIState.CraftingTable:
+                case UIState.Furnace:
                     RenderInventoryAndCrafting(screenWidth, screenHeight, mousePosition);
                     break;
 
@@ -672,6 +791,7 @@ namespace VoxelRenderEngine.src.UI
             renderer.DrawCrosshair(screenW * 0.5f, screenH * 0.5f);
 
             // In-game Clock Display (Top Right)
+            float clockBottomY = 16f;
             if (DayNightCycle != null)
             {
                 string timeStr = DayNightCycle.GetTimeString();
@@ -684,7 +804,28 @@ namespace VoxelRenderEngine.src.UI
                     new Vector4(0.08f, 0.09f, 0.12f, 0.75f),
                     new Vector4(0.28f, 0.32f, 0.40f, 0.65f), 1.0f);
                 renderer.DrawText(timeStr, clockX, clockY, clockScale, new Vector4(0.95f, 0.95f, 0.95f, 0.95f), shadow: true);
+
+                clockBottomY = clockY + textSz.Y + 8f;
             }
+
+            // In-game FPS Display (Just below Time)
+            UpdateFpsCounter();
+            float fpsScale = 0.95f;
+            Vector2 fpsSz = renderer.MeasureText(cachedFpsString, fpsScale);
+            float fpsX = screenW - fpsSz.X - 24f;
+            float fpsY = clockBottomY + 4f;
+
+            renderer.DrawPanel(fpsX - 8f, fpsY - 3f, fpsSz.X + 16f, fpsSz.Y + 6f,
+                new Vector4(0.08f, 0.09f, 0.12f, 0.75f),
+                new Vector4(0.28f, 0.32f, 0.40f, 0.65f), 1.0f);
+
+            Vector4 fpsColor = cachedFpsValue >= 50
+                ? new Vector4(0.40f, 0.95f, 0.45f, 0.95f) // Smooth green for good FPS
+                : (cachedFpsValue >= 30
+                    ? new Vector4(0.95f, 0.85f, 0.30f, 0.95f) // Yellow
+                    : new Vector4(0.95f, 0.35f, 0.30f, 0.95f)); // Red for low FPS
+
+            renderer.DrawText(cachedFpsString, fpsX, fpsY, fpsScale, fpsColor, shadow: true);
 
             // 2. Block Breaking Progress Bar (if breaking a block)
             float slotSize = 42f;
@@ -794,16 +935,34 @@ namespace VoxelRenderEngine.src.UI
             // Left Panel: Crafting List
             // =========================
             renderer.DrawPanel(leftPanelX, startY, panelWidth, panelHeight, panelBg, panelBorder, 1.5f);
-            renderer.DrawText("CRAFTING & RECIPES", leftPanelX + 14f, startY + 12f, 1.3f, new Vector4(0.95f, 0.95f, 1.0f, 1.0f));
 
-            // Category Tabs
+            string titleText = CurrentState switch
+            {
+                UIState.PersonalInventory => "PERSONAL CRAFTING (2x2)",
+                UIState.CraftingTable => "CRAFTING TABLE (3x3)",
+                UIState.Furnace => "FURNACE SMELTING",
+                _ => "CRAFTING & RECIPES"
+            };
+            renderer.DrawText(titleText, leftPanelX + 14f, startY + 12f, 1.3f, new Vector4(0.95f, 0.95f, 1.0f, 1.0f));
+
+            // Category Tabs or Subtitle
             float tabY = startY + 36f;
             float tabH = 22f;
             float tabW = 86f;
 
-            RenderTab("All", leftPanelX + 14f, tabY, tabW, tabH, activeCategory == RecipeCategory.All, mousePos);
-            RenderTab("Crafting", leftPanelX + 14f + tabW + 6f, tabY, tabW, tabH, activeCategory == RecipeCategory.Crafting, mousePos);
-            RenderTab("Smelting", leftPanelX + 14f + (tabW + 6f) * 2, tabY, tabW, tabH, activeCategory == RecipeCategory.Smelting, mousePos);
+            if (CurrentState == UIState.CraftingTable)
+            {
+                RenderTab("All", leftPanelX + 14f, tabY, tabW, tabH, activeCategory == RecipeCategory.All, mousePos);
+                RenderTab("Workbench", leftPanelX + 14f + tabW + 6f, tabY, tabW + 14f, tabH, activeCategory == RecipeCategory.Crafting, mousePos);
+            }
+            else if (CurrentState == UIState.Furnace)
+            {
+                renderer.DrawText("Requires 1 Coal fuel per smelted item.", leftPanelX + 14f, tabY + 4f, 0.9f, new Vector4(1.0f, 0.70f, 0.30f, 1.0f));
+            }
+            else if (CurrentState == UIState.PersonalInventory)
+            {
+                renderer.DrawText("Basic 2x2. Right-click Crafting Table for workbench.", leftPanelX + 14f, tabY + 4f, 0.85f, new Vector4(0.65f, 0.70f, 0.80f, 0.85f));
+            }
 
             // Recipe Cards
             var recipes = GetFilteredRecipes();
@@ -942,8 +1101,10 @@ namespace VoxelRenderEngine.src.UI
             // Dimmed backdrop
             renderer.DrawQuad(0, 0, screenW, screenH, new Vector4(0.02f, 0.02f, 0.03f, 0.65f));
 
+            int chestRows = currentChestInventory.SlotCount > 18 ? 4 : 2;
+            string titleText = (chestRows == 4) ? "LARGE CHEST STORAGE" : "CHEST STORAGE";
             float panelWidth = 430f;
-            float panelHeight = 420f;
+            float panelHeight = (chestRows == 4) ? 500f : 420f;
             float startX = (screenW - panelWidth) * 0.5f;
             float startY = (screenH - panelHeight) * 0.5f;
 
@@ -951,7 +1112,7 @@ namespace VoxelRenderEngine.src.UI
             Vector4 panelBorder = new Vector4(0.28f, 0.32f, 0.40f, 0.85f);
 
             renderer.DrawPanel(startX, startY, panelWidth, panelHeight, panelBg, panelBorder, 1.5f);
-            renderer.DrawText("CHEST STORAGE", startX + 16f, startY + 14f, 1.3f, new Vector4(0.95f, 0.95f, 1.0f, 1.0f));
+            renderer.DrawText(titleText, startX + 16f, startY + 14f, 1.3f, new Vector4(0.95f, 0.95f, 1.0f, 1.0f));
 
             // Close Button [X]
             float closeX = startX + panelWidth - 28f;
@@ -969,9 +1130,9 @@ namespace VoxelRenderEngine.src.UI
             float slotGap = 4f;
             float invStartX = startX + (panelWidth - (9 * slotSize + 8 * slotGap)) * 0.5f;
 
-            // 1. Chest Slots (18 slots = 2 rows of 9)
+            // 1. Chest Slots
             float chestStartY = startY + 40f;
-            for (int row = 0; row < 2; row++)
+            for (int row = 0; row < chestRows; row++)
             {
                 for (int col = 0; col < 9; col++)
                 {
@@ -993,7 +1154,7 @@ namespace VoxelRenderEngine.src.UI
             }
 
             // Divider line
-            float divY = chestStartY + 2 * (slotSize + slotGap) + 16f;
+            float divY = chestStartY + chestRows * (slotSize + slotGap) + 16f;
             renderer.DrawQuad(invStartX, divY, (9 * slotSize + 8 * slotGap), 1.5f, new Vector4(0.3f, 0.35f, 0.45f, 0.5f));
             renderer.DrawText("PLAYER INVENTORY", invStartX, divY + 8f, 0.95f, new Vector4(0.85f, 0.88f, 0.95f, 0.9f));
 
@@ -1067,7 +1228,7 @@ namespace VoxelRenderEngine.src.UI
             renderer.DrawQuad(0, 0, screenW, screenH, new Vector4(0.02f, 0.02f, 0.04f, 0.70f));
 
             float panelWidth = 320f;
-            float panelHeight = 350f;
+            float panelHeight = 400f;
             float startX = (screenW - panelWidth) * 0.5f;
             float startY = (screenH - panelHeight) * 0.5f;
 
@@ -1096,7 +1257,8 @@ namespace VoxelRenderEngine.src.UI
             }
 
             float btnW = 240f;
-            float btnH = 38f;
+            float btnH = 34f;
+            float btnSpacing = 8f;
             float btnX = startX + (panelWidth - btnW) * 0.5f;
 
             // Button 1: Resume Game
@@ -1104,21 +1266,60 @@ namespace VoxelRenderEngine.src.UI
             RenderMenuButton("RESUME GAME", btnX, btn1Y, btnW, btnH, mousePos);
 
             // Button 2: Save Game
-            float btn2Y = btn1Y + btnH + 8f;
+            float btn2Y = btn1Y + btnH + btnSpacing;
             RenderMenuButton("SAVE GAME", btnX, btn2Y, btnW, btnH, mousePos);
 
             // Button 3: Save & Main Menu
-            float btn3Y = btn2Y + btnH + 8f;
+            float btn3Y = btn2Y + btnH + btnSpacing;
             RenderMenuButton("SAVE & MAIN MENU", btnX, btn3Y, btnW, btnH, mousePos);
 
             // Button 4: Toggle Fly Mode
-            float btn4Y = btn3Y + btnH + 8f;
+            float btn4Y = btn3Y + btnH + btnSpacing;
             string flyText = (player?.IsFlying ?? false) ? "FLIGHT: ENABLED" : "FLIGHT: DISABLED";
             RenderMenuButton(flyText, btnX, btn4Y, btnW, btnH, mousePos);
 
-            // Button 5: Quit to Desktop
-            float btn5Y = btn4Y + btnH + 8f;
-            RenderMenuButton("QUIT TO DESKTOP", btnX, btn5Y, btnW, btnH, mousePos, isDestructive: true);
+            // Button 5: Anti-Aliasing (Toggle)
+            float btn5Y = btn4Y + btnH + btnSpacing;
+            string aaText = IsAntiAliasingEnabled ? "ANTI-ALIASING: ON" : "ANTI-ALIASING: OFF";
+            RenderMenuButton(aaText, btnX, btn5Y, btnW, btnH, mousePos);
+
+            // Section 6: Render Distance Slider (2 to 16 chunks)
+            float sliderY = btn5Y + btnH + btnSpacing + 2f;
+            int curDist = world?.ViewDistanceChunks ?? renderDistanceChunks;
+            string distText = $"RENDER DISTANCE: {curDist} CHUNKS";
+            Vector2 distSz = renderer.MeasureText(distText, 0.90f);
+            renderer.DrawText(distText, btnX + (btnW - distSz.X) * 0.5f, sliderY, 0.90f, new Vector4(0.85f, 0.90f, 1.0f, 0.95f), shadow: true);
+
+            float trackX = btnX;
+            float trackY = sliderY + 18f;
+            float trackW = btnW;
+            float trackH = 10f;
+
+            // Slider background track
+            renderer.DrawPanel(trackX, trackY, trackW, trackH, new Vector4(0.06f, 0.08f, 0.12f, 0.95f), new Vector4(0.30f, 0.35f, 0.45f, 0.8f), 1.0f);
+
+            // Slider fill
+            float t = Math.Clamp((curDist - 2f) / 14f, 0f, 1f);
+            float fillW = t * trackW;
+            if (fillW > 0f)
+            {
+                renderer.DrawQuad(trackX + 1f, trackY + 1f, fillW - 2f, trackH - 2f, new Vector4(0.25f, 0.65f, 1.0f, 0.85f));
+            }
+
+            // Slider handle / knob
+            float knobW = 16f;
+            float knobH = 20f;
+            float knobX = trackX + t * trackW - knobW * 0.5f;
+            float knobY = trackY + (trackH - knobH) * 0.5f;
+
+            bool isKnobHovered = (mousePos.X >= knobX && mousePos.X <= knobX + knobW && mousePos.Y >= knobY && mousePos.Y <= knobY + knobH) || isDraggingRenderDistanceSlider;
+            Vector4 knobBg = isKnobHovered ? new Vector4(0.95f, 0.98f, 1.0f, 1.0f) : new Vector4(0.75f, 0.85f, 0.98f, 0.95f);
+            Vector4 knobBorder = isKnobHovered ? new Vector4(0.30f, 0.80f, 1.0f, 1.0f) : new Vector4(0.35f, 0.45f, 0.60f, 0.9f);
+            renderer.DrawPanel(knobX, knobY, knobW, knobH, knobBg, knobBorder, 1.5f);
+
+            // Button 7: Quit to Desktop
+            float btn6Y = sliderY + 42f;
+            RenderMenuButton("QUIT TO DESKTOP", btnX, btn6Y, btnW, btnH, mousePos, isDestructive: true);
         }
 
         private void RenderMenuButton(string text, float x, float y, float w, float h, Vector2 mousePos, bool isDestructive = false)
@@ -1140,6 +1341,35 @@ namespace VoxelRenderEngine.src.UI
             float ty = y + (h - textSz.Y) * 0.5f;
             Vector4 textColor = isHovered ? Vector4.One : new Vector4(0.85f, 0.88f, 0.95f, 0.9f);
             renderer.DrawText(text, tx, ty, 1.1f, textColor, shadow: true);
+        }
+
+        private void UpdateFpsCounter()
+        {
+            fpsFrameCounter++;
+            long now = System.Diagnostics.Stopwatch.GetTimestamp();
+
+            if (lastFpsTimestamp == 0)
+            {
+                lastFpsTimestamp = now;
+                return;
+            }
+
+            double elapsed = (double)(now - lastFpsTimestamp) / System.Diagnostics.Stopwatch.Frequency;
+            // Update FPS readout every ~0.33 seconds (3 times per second) for smooth readability and zero GC/lag
+            if (elapsed >= 0.33)
+            {
+                if (elapsed <= 1.0)
+                {
+                    int newFps = (int)Math.Round(fpsFrameCounter / elapsed);
+                    if (newFps != cachedFpsValue)
+                    {
+                        cachedFpsValue = newFps;
+                        cachedFpsString = $"FPS: {cachedFpsValue}";
+                    }
+                }
+                fpsFrameCounter = 0;
+                lastFpsTimestamp = now;
+            }
         }
     }
 }

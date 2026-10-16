@@ -11,14 +11,13 @@ out vec3 fragNormal;
 
 //uniform variables
 uniform mat4 model;
-uniform mat4 view;
-uniform mat4 projection;
+uniform mat4 viewProj;
 
 void main()
 {
 	vec4 worldPosition = vec4(aPosition, 1.0) * model;
 	fragWorldPos = worldPosition.xyz;
-	gl_Position = worldPosition * view * projection;
+	gl_Position = worldPosition * viewProj;
 	texCoord = aTexCoord;
 	fragColor = aColor;
 	fragNormal = mat3(model) * aNormal;

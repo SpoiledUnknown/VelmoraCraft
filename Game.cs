@@ -55,6 +55,24 @@ namespace VoxelRenderEngine
         private float currentWaterTint = 0f;
         private float currentLavaTint = 0f;
 
+        // Cached Shader Uniform Locations to eliminate per-frame driver string queries
+        private int uModel = -1;
+        private int uViewProj = -1;
+        private int uViewPos = -1;
+        private int uFogColor = -1;
+        private int uFogStart = -1;
+        private int uFogEnd = -1;
+        private int uLightDir = -1;
+        private int uLightColor = -1;
+        private int uAmbientColor = -1;
+        private int uLightIntensity = -1;
+        private int uNumPointLights = -1;
+        private int uIsTranslucentPass = -1;
+        private readonly int[] uPointLightPos = new int[16];
+        private readonly int[] uPointLightCol = new int[16];
+        private readonly int[] uPointLightRad = new int[16];
+        private readonly int[] uPointLightInt = new int[16];
+
         private int width;
         private int height;
 
@@ -94,6 +112,7 @@ namespace VoxelRenderEngine
         protected override void OnLoad()
         {
             shaderProgram = new ShaderProgram("Default.vert", "Default.frag");
+            InitShaderUniforms();
             texture = new Texture("atlas.png");
 
             // Initialize Sky & Celestial Renderer (Sun, Moon, Stars, Dynamic Clouds)
@@ -157,6 +176,7 @@ namespace VoxelRenderEngine
 
             // Create initial scenic 3D world for Main Menu background
             world = new World(seed: 1337, worldChunks: 64);
+            world.TranslucentPassUniformLoc = uIsTranslucentPass;
 
             // Scenic orbiting camera looking over the terrain
             int initCenter = world.WorldSizeX / 2;
@@ -174,8 +194,19 @@ namespace VoxelRenderEngine
                 uiManager.OpenChest(pos, chestInv);
                 CursorState = CursorState.Normal;
             };
+            player.OnOpenCraftingTable = () =>
+            {
+                uiManager.OpenCraftingTable();
+                CursorState = CursorState.Normal;
+            };
+            player.OnOpenFurnace = (pos) =>
+            {
+                uiManager.OpenFurnace(pos);
+                CursorState = CursorState.Normal;
+            };
             player.OnPortalEntered = () => TriggerVictoryScreen();
             uiManager.SetPlayer(player);
+            uiManager.SetWorld(world);
 
             // Start on Main Menu scene with visible cursor
             currentScene = SceneState.MainMenu;
@@ -190,6 +221,7 @@ namespace VoxelRenderEngine
             // Destroy existing world and recreate cleanly with given seed and world size
             world?.Destroy();
             world = new World(seed, worldSize);
+            world.TranslucentPassUniformLoc = uIsTranslucentPass;
 
             chestManager?.Clear();
             totalPlayTime = 0f;
@@ -208,21 +240,23 @@ namespace VoxelRenderEngine
                 uiManager?.OpenChest(pos, chestInv);
                 CursorState = CursorState.Normal;
             };
+            player.OnOpenCraftingTable = () =>
+            {
+                uiManager?.OpenCraftingTable();
+                CursorState = CursorState.Normal;
+            };
+            player.OnOpenFurnace = (pos) =>
+            {
+                uiManager?.OpenFurnace(pos);
+                CursorState = CursorState.Normal;
+            };
             player.OnPortalEntered = () => TriggerVictoryScreen();
 
-            // Populate initial helpful starter inventory (including Obsidian & Flint and Steel for portal testing)
+            // Clean starter inventory for completed game progression
             player.Inventory.Clear();
-            player.Inventory.AddItem(BlockType.Planks, 64);
-            player.Inventory.AddItem(BlockType.Cobblestone, 64);
-            player.Inventory.AddItem(BlockType.Torch, 16);
-            player.Inventory.AddItem(BlockType.MinecartItem, 2);
-            player.Inventory.AddItem(BlockType.Rail, 32);
-            player.Inventory.AddItem(BlockType.PoweredRail, 8);
-            player.Inventory.AddItem(BlockType.Lever, 4);
-            player.Inventory.AddItem(BlockType.Obsidian, 14);
-            player.Inventory.AddItem(BlockType.FlintAndSteel, 1);
 
             uiManager?.SetPlayer(player);
+            uiManager?.SetWorld(world);
 
             currentScene = SceneState.InGame;
             if (mainMenu != null) mainMenu.HasActiveWorld = true;
@@ -258,20 +292,33 @@ namespace VoxelRenderEngine
         {
             world?.Destroy();
             world = new World(data.Seed, data.WorldChunks);
+            world.TranslucentPassUniformLoc = uIsTranslucentPass;
 
             chestManager?.Clear();
 
-            camera = new Camera(width, height, new Vector3(data.PlayerX, data.PlayerY, data.PlayerZ));
+            float safeY = data.PlayerY + 0.65f;
+            var safePos = new Vector3(data.PlayerX, safeY, data.PlayerZ);
+            camera = new Camera(width, height, safePos + new Vector3(0, 1.62f, 0));
             camera.Yaw = data.PlayerYaw;
             camera.Pitch = data.PlayerPitch;
             camera.UpdateVectors();
 
-            player = new Player(new Vector3(data.PlayerX, data.PlayerY, data.PlayerZ), camera);
+            player = new Player(safePos, camera);
             player.ChestManager = chestManager;
             player.AudioManager = audioManager;
             player.OnOpenChest = (pos, chestInv) =>
             {
                 uiManager?.OpenChest(pos, chestInv);
+                CursorState = CursorState.Normal;
+            };
+            player.OnOpenCraftingTable = () =>
+            {
+                uiManager?.OpenCraftingTable();
+                CursorState = CursorState.Normal;
+            };
+            player.OnOpenFurnace = (pos) =>
+            {
+                uiManager?.OpenFurnace(pos);
                 CursorState = CursorState.Normal;
             };
             player.OnPortalEntered = () => TriggerVictoryScreen();
@@ -280,6 +327,7 @@ namespace VoxelRenderEngine
             totalPlayTime = data.PlayTimeSeconds;
 
             uiManager?.SetPlayer(player);
+            uiManager?.SetWorld(world);
             currentScene = SceneState.InGame;
             if (mainMenu != null) mainMenu.HasActiveWorld = true;
             CursorState = CursorState.Grabbed;
@@ -394,48 +442,34 @@ namespace VoxelRenderEngine
             Matrix4 model = Matrix4.Identity;
             Matrix4 view = activeCam.GetViewMatrix();
             Matrix4 projection = activeCam.GetProjectionMatrix();
+            Matrix4 viewProj = view * projection;
 
             shaderProgram!.Bind();
             texture!.Bind();
 
-            int modelLocation = GL.GetUniformLocation(shaderProgram.ID, "model");
-            int viewLocation = GL.GetUniformLocation(shaderProgram.ID, "view");
-            int projectionLocation = GL.GetUniformLocation(shaderProgram.ID, "projection");
-
-            GL.UniformMatrix4f(modelLocation, 1, true, ref model);
-            GL.UniformMatrix4f(viewLocation, 1, true, ref view);
-            GL.UniformMatrix4f(projectionLocation, 1, true, ref projection);
+            GL.UniformMatrix4f(uModel, 1, true, ref model);
+            GL.UniformMatrix4f(uViewProj, 1, true, ref viewProj);
 
             // Fog & camera uniforms
             Vector3 camPos = activeCam.Position;
-            int viewPosLoc = GL.GetUniformLocation(shaderProgram.ID, "viewPos");
-            int fogColorLoc = GL.GetUniformLocation(shaderProgram.ID, "fogColor");
-            int fogStartLoc = GL.GetUniformLocation(shaderProgram.ID, "fogStart");
-            int fogEndLoc = GL.GetUniformLocation(shaderProgram.ID, "fogEnd");
-
-            GL.Uniform3f(viewPosLoc, 1, ref camPos);
-            GL.Uniform3f(fogColorLoc, 1, ref fogColor);
-            GL.Uniform1f(fogStartLoc, fogStart);
-            GL.Uniform1f(fogEndLoc, fogEnd);
+            GL.Uniform3f(uViewPos, 1, ref camPos);
+            GL.Uniform3f(uFogColor, 1, ref fogColor);
+            GL.Uniform1f(uFogStart, fogStart);
+            GL.Uniform1f(uFogEnd, fogEnd);
 
             // Dynamic Day/Night Lighting uniforms
-            int lightDirLoc = GL.GetUniformLocation(shaderProgram.ID, "lightDir");
-            int lightColorLoc = GL.GetUniformLocation(shaderProgram.ID, "lightColor");
-            int ambientColorLoc = GL.GetUniformLocation(shaderProgram.ID, "ambientColor");
-            int lightIntensityLoc = GL.GetUniformLocation(shaderProgram.ID, "lightIntensity");
-
             Vector3 lightDir = dayNightCycle?.ActiveLightDirection ?? Vector3.UnitY;
             Vector3 lightColor = dayNightCycle?.ActiveLightColor ?? Vector3.One;
             Vector3 ambientColor = dayNightCycle?.AmbientColor ?? new Vector3(0.4f, 0.4f, 0.4f);
             float lightIntensity = dayNightCycle?.ActiveLightIntensity ?? 1.0f;
 
-            GL.Uniform3f(lightDirLoc, 1, ref lightDir);
-            GL.Uniform3f(lightColorLoc, 1, ref lightColor);
-            GL.Uniform3f(ambientColorLoc, 1, ref ambientColor);
-            GL.Uniform1f(lightIntensityLoc, lightIntensity);
+            GL.Uniform3f(uLightDir, 1, ref lightDir);
+            GL.Uniform3f(uLightColor, 1, ref lightColor);
+            GL.Uniform3f(uAmbientColor, 1, ref ambientColor);
+            GL.Uniform1f(uLightIntensity, lightIntensity);
 
             // Dynamic Point Lights (Placed Torches, Lava, Handheld Torch)
-            var pointLights = world?.GetActivePointLights(activeCam.Position, maxCount: 15)
+            var pointLights = world?.GetActivePointLights(activeCam.Position, maxCount: 15, dt)
                 ?? new List<(Vector3, Vector3, float, float)>();
 
             if (currentScene == SceneState.InGame && player != null && player.SelectedPlacementBlock == BlockType.Torch)
@@ -444,26 +478,20 @@ namespace VoxelRenderEngine
             }
 
             int count = Math.Min(16, pointLights.Count);
-            int numLightsLoc = GL.GetUniformLocation(shaderProgram.ID, "numPointLights");
-            GL.Uniform1i(numLightsLoc, count);
+            GL.Uniform1i(uNumPointLights, count);
 
             for (int i = 0; i < count; i++)
             {
                 var light = pointLights[i];
-                int posLoc = GL.GetUniformLocation(shaderProgram.ID, $"pointLightPositions[{i}]");
-                int colLoc = GL.GetUniformLocation(shaderProgram.ID, $"pointLightColors[{i}]");
-                int radLoc = GL.GetUniformLocation(shaderProgram.ID, $"pointLightRadii[{i}]");
-                int intLoc = GL.GetUniformLocation(shaderProgram.ID, $"pointLightIntensities[{i}]");
-
                 Vector3 pos = light.Position;
                 Vector3 col = light.Color;
-                GL.Uniform3f(posLoc, 1, ref pos);
-                GL.Uniform3f(colLoc, 1, ref col);
-                GL.Uniform1f(radLoc, light.Radius);
-                GL.Uniform1f(intLoc, light.Intensity);
+                GL.Uniform3f(uPointLightPos[i], 1, ref pos);
+                GL.Uniform3f(uPointLightCol[i], 1, ref col);
+                GL.Uniform1f(uPointLightRad[i], light.Radius);
+                GL.Uniform1f(uPointLightInt[i], light.Intensity);
             }
 
-            // Render 3D World with directional and distance culling
+            // Render 3D World with true 3D frustum and distance culling
             world?.Render(shaderProgram, activeCam);
 
             // 2. Render Dynamic Voxel Clouds overhead
@@ -635,6 +663,32 @@ namespace VoxelRenderEngine
             }
 
             base.OnUpdateFrame(args);
+        }
+
+        private void InitShaderUniforms()
+        {
+            if (shaderProgram == null) return;
+            int pid = shaderProgram.ID;
+            uModel = GL.GetUniformLocation(pid, "model");
+            uViewProj = GL.GetUniformLocation(pid, "viewProj");
+            uViewPos = GL.GetUniformLocation(pid, "viewPos");
+            uFogColor = GL.GetUniformLocation(pid, "fogColor");
+            uFogStart = GL.GetUniformLocation(pid, "fogStart");
+            uFogEnd = GL.GetUniformLocation(pid, "fogEnd");
+            uLightDir = GL.GetUniformLocation(pid, "lightDir");
+            uLightColor = GL.GetUniformLocation(pid, "lightColor");
+            uAmbientColor = GL.GetUniformLocation(pid, "ambientColor");
+            uLightIntensity = GL.GetUniformLocation(pid, "lightIntensity");
+            uNumPointLights = GL.GetUniformLocation(pid, "numPointLights");
+            uIsTranslucentPass = GL.GetUniformLocation(pid, "isTranslucentPass");
+
+            for (int i = 0; i < 16; i++)
+            {
+                uPointLightPos[i] = GL.GetUniformLocation(pid, $"pointLightPositions[{i}]");
+                uPointLightCol[i] = GL.GetUniformLocation(pid, $"pointLightColors[{i}]");
+                uPointLightRad[i] = GL.GetUniformLocation(pid, $"pointLightRadii[{i}]");
+                uPointLightInt[i] = GL.GetUniformLocation(pid, $"pointLightIntensities[{i}]");
+            }
         }
     }
 }

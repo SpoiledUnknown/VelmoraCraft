@@ -134,3 +134,17 @@ This document outlines key technical decisions made in the Voxel Render Engine, 
   * Realistic geological distribution: Coal spans wide depths ($y \in [5, 115]$), Iron mid-depths ($y \in [5, 75]$), Gold deeper ($y \in [5, 36]$), and Lapis/Redstone/Diamond clustered near bedrock ($y \in [1, 20]$).
   * Biomes feature distinctive foliage: Deserts spawn Sandstone strata and Cacti; snowy mountain peaks ($y > 90$) feature Snow Blocks and Spruce Pines; forests generate mixed Oak and Birch trees; shorelines spawn Sugar Cane and Clay beds; deep underground caves generate Mossy Cobblestone dungeon rooms with Monster Spawners.
 
+---
+
+## 12. Station-Based Crafting & Smelting Architecture
+
+* **Chosen Design**: Separation of recipes by functional workstation (`RecipeStation.Personal`, `RecipeStation.CraftingTable`, `RecipeStation.Furnace`).
+* **Why**:
+  * Adheres to authentic survival progression:
+    1. **Personal Inventory (`E`)**: Restricted to basic 2x2 survival recipes (Planks, Crafting Table, Torches, Buttons, Levers, Sandstone, Snow Blocks, White Wool).
+    2. **Crafting Table (Interactive Block)**: Right-clicking a placed `CraftingTable` in the world opens the full 3x3 Workbench station, unlocking architectural elements (Chests, Furnaces, Doors, Ladders, Bookshelves, Rails, TNT, Dispenser, Jukebox, Cake) and full 16-color wool dyeing.
+    3. **Furnace (Interactive Block)**: Smelting recipes (Iron Ingot, Glass, Stone, Smooth Stone, Bricks, Charcoal, Glowstone) are strictly prohibited from personal inventory and require right-clicking a placed `Furnace` or `LitFurnace`, consuming 1 Coal fuel per operation.
+* **Direct Mineral Compression**:
+  * Minerals operate directly between ores/ingots and solid mineral blocks ($9\times\text{ Ore} \leftrightarrow 1\times\text{ Block}$) without needing loose intermediate dust items.
+
+

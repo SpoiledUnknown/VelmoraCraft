@@ -117,7 +117,9 @@ namespace VoxelRenderEngine.src.World
         BrownWool = 96,
         GreenWool = 97,
         RedWool = 98,
-        BlackWool = 99
+        BlackWool = 99,
+        RedstoneBlock = 100,
+        CoalBlock = 101
     }
 
     public enum Face : byte
@@ -128,6 +130,24 @@ namespace VoxelRenderEngine.src.World
         Right = 3,
         Top = 4,
         Bottom = 5
+    }
+
+    public enum BlockFacing : byte
+    {
+        South = 0, // Faces +Z (default)
+        North = 1, // Faces -Z (180 deg)
+        West = 2,  // Faces -X (90 deg CCW)
+        East = 3   // Faces +X (90 deg CW)
+    }
+
+    public enum RailShape : byte
+    {
+        NorthSouth = 0, // Straight along Z (0 deg)
+        EastWest = 1,   // Straight along X (90 deg)
+        SouthEast = 2,  // Curve connecting South (+Z) and East (+X)
+        SouthWest = 3,  // Curve connecting South (+Z) and West (-X)
+        NorthWest = 4,  // Curve connecting North (-Z) and West (-X)
+        NorthEast = 5   // Curve connecting North (-Z) and East (+X)
     }
 
     public enum MeshType : byte
@@ -353,7 +373,7 @@ namespace VoxelRenderEngine.src.World
             Register(CreateUniformBlock(BlockType.StoneButtonPressed, "Stone Button (Pressed)", isSolid: false, isTransparent: true, hardness: 0.5f, new Vector2(1, 0), tintColor: new Vector3(1.3f, 0.4f, 0.3f), meshType: MeshType.WallButton));
 
             // 5. Rails
-            Register(CreateUniformBlock(BlockType.Rail, "Rail", isSolid: false, isTransparent: true, hardness: 0.7f, new Vector2(0, 7), meshType: MeshType.FlatSurface));
+            Register(CreateUniformBlock(BlockType.Rail, "Rail", isSolid: false, isTransparent: true, hardness: 0.7f, new Vector2(0, 8), meshType: MeshType.FlatSurface));
             Register(CreateUniformBlock(BlockType.PoweredRail, "Powered Rail", isSolid: false, isTransparent: true, hardness: 0.7f, new Vector2(0, 8), meshType: MeshType.FlatSurface));
             Register(CreateUniformBlock(BlockType.PoweredRailOn, "Powered Rail (Active)", isSolid: false, isTransparent: true, hardness: 0.7f, new Vector2(0, 8), tintColor: new Vector3(1.4f, 0.4f, 0.3f), meshType: MeshType.FlatSurface));
 
@@ -440,6 +460,8 @@ namespace VoxelRenderEngine.src.World
             Register(CreateUniformBlock(BlockType.GreenWool, "Green Wool", isSolid: true, isTransparent: false, hardness: 0.8f, new Vector2(1, 10)));
             Register(CreateUniformBlock(BlockType.RedWool, "Red Wool", isSolid: true, isTransparent: false, hardness: 0.8f, new Vector2(1, 9)));
             Register(CreateUniformBlock(BlockType.BlackWool, "Black Wool", isSolid: true, isTransparent: false, hardness: 0.8f, new Vector2(1, 8)));
+            Register(CreateUniformBlock(BlockType.RedstoneBlock, "Block of Redstone", isSolid: true, isTransparent: false, hardness: 5.0f, new Vector2(8, 1), tintColor: new Vector3(0.95f, 0.15f, 0.15f), isLightSource: true));
+            Register(CreateUniformBlock(BlockType.CoalBlock, "Block of Coal", isSolid: true, isTransparent: false, hardness: 5.0f, new Vector2(6, 1), tintColor: new Vector3(0.12f, 0.12f, 0.12f)));
         }
 
         private static BlockDefinition CreateMultiFaceBlock(
@@ -541,5 +563,21 @@ namespace VoxelRenderEngine.src.World
         {
             return (Definitions[type]?.IsSolid) ?? false;
         }
+
+        public static bool IsDirectionalBlock(BlockType type) =>
+            type == BlockType.Furnace ||
+            type == BlockType.LitFurnace ||
+            type == BlockType.Dispenser ||
+            type == BlockType.CarvedPumpkin ||
+            type == BlockType.JackOLantern ||
+            type == BlockType.CraftingTable ||
+            type == BlockType.Chest;
+
+        public static bool IsRailBlock(BlockType type) =>
+            type == BlockType.Rail ||
+            type == BlockType.PoweredRail ||
+            type == BlockType.PoweredRailOn;
+
+        public static bool IsRailBlock(byte type) => IsRailBlock((BlockType)type);
     }
 }

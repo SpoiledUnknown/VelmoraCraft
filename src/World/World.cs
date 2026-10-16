@@ -32,6 +32,7 @@ namespace VoxelRenderEngine.src.World
         public readonly List<Minecart> Minecarts = new List<Minecart>();
         private readonly ConcurrentDictionary<Vector3i, byte> lightSources = new ConcurrentDictionary<Vector3i, byte>();
         public readonly ConcurrentDictionary<Vector3i, BlockType> ModifiedBlocks = new ConcurrentDictionary<Vector3i, BlockType>();
+        public readonly ConcurrentDictionary<Vector3i, byte> BlockMetadataMap = new ConcurrentDictionary<Vector3i, byte>();
         public readonly FluidSystem FluidSystem = new FluidSystem();
 
         // Thread-safe queues for multithreaded terrain generation and meshing
@@ -46,6 +47,13 @@ namespace VoxelRenderEngine.src.World
 
         // Cached reusable collections to eliminate per-frame allocations
         private readonly List<Chunk> visibleChunks = new List<Chunk>(512);
+        private readonly List<Chunk> visibleOpaqueChunks = new List<Chunk>(256);
+        private readonly List<Chunk> visibleWaterChunks = new List<Chunk>(64);
+        private Frustum cameraFrustum = new Frustum();
+        public int TranslucentPassUniformLoc { get; set; } = -1;
+        private Vector3 lastLightQueryPos = new Vector3(-9999f, -9999f, -9999f);
+        private float lightQueryTimer = 0f;
+
         private readonly List<(Vector2i coord, int distSq)> toEnqueueChunks = new List<(Vector2i, int)>(128);
         private readonly List<(Vector3 Position, Vector3 Color, float Radius, float Intensity)> activePointLights = new List<(Vector3, Vector3, float, float)>(16);
         private readonly List<(Vector3i Pos, float DistSq)> lightCandidates = new List<(Vector3i Pos, float DistSq)>(64);
@@ -186,7 +194,7 @@ namespace VoxelRenderEngine.src.World
             return (byte)BlockType.Empty;
         }
 
-        public void SetBlockWorld(int wx, int wy, int wz, BlockType type)
+        public void SetBlockWorld(int wx, int wy, int wz, BlockType type, byte metadata = 0)
         {
             if (wy < 0 || wy >= Chunk.SIZE_Y) return;
 
@@ -201,22 +209,97 @@ namespace VoxelRenderEngine.src.World
                 int lz = wz - (cz * Chunk.SIZE_Z);
 
                 byte oldBlock = chunk.GetBlock(lx, wy, lz);
+                var pos = new Vector3i(wx, wy, wz);
                 if (BlockRegistry.Get(oldBlock).IsLightSource)
                 {
-                    lightSources.TryRemove(new Vector3i(wx, wy, wz), out _);
+                    lightSources.TryRemove(pos, out _);
+                    chunk.LightPositions.Remove(pos);
                 }
 
                 chunk.SetBlock(lx, wy, lz, type);
-                ModifiedBlocks[new Vector3i(wx, wy, wz)] = type;
+                chunk.SetMetadata(lx, wy, lz, metadata);
+
+                if (type == BlockType.Empty)
+                {
+                    ModifiedBlocks[pos] = type;
+                    BlockMetadataMap.TryRemove(pos, out _);
+                }
+                else
+                {
+                    ModifiedBlocks[pos] = type;
+                    if (metadata > 0)
+                    {
+                        BlockMetadataMap[pos] = metadata;
+                    }
+                    else
+                    {
+                        BlockMetadataMap.TryRemove(pos, out _);
+                    }
+                }
 
                 if (BlockRegistry.Get(type).IsLightSource)
                 {
-                    lightSources.TryAdd(new Vector3i(wx, wy, wz), 0);
+                    lightSources.TryAdd(pos, 0);
+                    if (!chunk.LightPositions.Contains(pos))
+                    {
+                        chunk.LightPositions.Add(pos);
+                    }
                 }
 
                 EnqueueChunk(coord);
 
                 // If block is on the edge of the chunk, also re-mesh adjacent chunk
+                if (lx == 0 && cx > 0) EnqueueChunk(new Vector2i(cx - 1, cz));
+                if (lx == Chunk.SIZE_X - 1 && cx < WORLD_CHUNKS_X - 1) EnqueueChunk(new Vector2i(cx + 1, cz));
+                if (lz == 0 && cz > 0) EnqueueChunk(new Vector2i(cx, cz - 1));
+                if (lz == Chunk.SIZE_Z - 1 && cz < WORLD_CHUNKS_Z - 1) EnqueueChunk(new Vector2i(cx, cz + 1));
+            }
+        }
+
+        public byte GetBlockMetadata(int wx, int wy, int wz)
+        {
+            if (wy < 0 || wy >= Chunk.SIZE_Y) return 0;
+
+            int cx = (int)Math.Floor((float)wx / Chunk.SIZE_X);
+            int cz = (int)Math.Floor((float)wz / Chunk.SIZE_Z);
+
+            if (chunks.TryGetValue(new Vector2i(cx, cz), out var chunk))
+            {
+                int lx = wx - (cx * Chunk.SIZE_X);
+                int lz = wz - (cz * Chunk.SIZE_Z);
+                return chunk.GetMetadata(lx, wy, lz);
+            }
+
+            return 0;
+        }
+
+        public void SetBlockMetadata(int wx, int wy, int wz, byte metadata)
+        {
+            if (wy < 0 || wy >= Chunk.SIZE_Y) return;
+
+            int cx = (int)Math.Floor((float)wx / Chunk.SIZE_X);
+            int cz = (int)Math.Floor((float)wz / Chunk.SIZE_Z);
+            var coord = new Vector2i(cx, cz);
+
+            if (IsChunkInsideWorld(coord))
+            {
+                var chunk = GetOrCreateChunk(coord);
+                int lx = wx - (cx * Chunk.SIZE_X);
+                int lz = wz - (cz * Chunk.SIZE_Z);
+
+                chunk.SetMetadata(lx, wy, lz, metadata);
+                var pos = new Vector3i(wx, wy, wz);
+                if (metadata > 0)
+                {
+                    BlockMetadataMap[pos] = metadata;
+                }
+                else
+                {
+                    BlockMetadataMap.TryRemove(pos, out _);
+                }
+
+                EnqueueChunk(coord);
+
                 if (lx == 0 && cx > 0) EnqueueChunk(new Vector2i(cx - 1, cz));
                 if (lx == Chunk.SIZE_X - 1 && cx < WORLD_CHUNKS_X - 1) EnqueueChunk(new Vector2i(cx + 1, cz));
                 if (lz == 0 && cz > 0) EnqueueChunk(new Vector2i(cx, cz - 1));
@@ -311,6 +394,7 @@ namespace VoxelRenderEngine.src.World
                         chunk.IsDecorated = true;
 
                         // Scan chunk for placed light sources (lava, torches)
+                        chunk.LightPositions.Clear();
                         for (int x = 0; x < Chunk.SIZE_X; x++)
                         {
                             for (int y = 0; y < Chunk.SIZE_Y; y++)
@@ -322,7 +406,9 @@ namespace VoxelRenderEngine.src.World
                                     {
                                         int wx = (int)chunk.Position.X + x;
                                         int wz = (int)chunk.Position.Z + z;
-                                        lightSources.TryAdd(new Vector3i(wx, y, wz), 0);
+                                        var lpos = new Vector3i(wx, y, wz);
+                                        lightSources.TryAdd(lpos, 0);
+                                        chunk.LightPositions.Add(lpos);
                                     }
                                 }
                             }
@@ -444,7 +530,10 @@ namespace VoxelRenderEngine.src.World
             }
 
             // Sort so closest chunks to player/camera are generated and meshed first!
-            toEnqueueChunks.Sort((a, b) => a.distSq.CompareTo(b.distSq));
+            if (toEnqueueChunks.Count > 1)
+            {
+                toEnqueueChunks.Sort((a, b) => a.distSq.CompareTo(b.distSq));
+            }
 
             int budget = 32; // Limit enqueue batch size to avoid overwhelming queue
             for (int i = 0; i < Math.Min(budget, toEnqueueChunks.Count); i++)
@@ -468,22 +557,23 @@ namespace VoxelRenderEngine.src.World
             }
         }
 
-        // Render visible chunks with distance and frustum culling
+        // Render visible chunks with distance and true 3D frustum culling
         public void Render(ShaderProgram shaderProgram, Camera? camera = null)
         {
             shaderProgram.Bind();
 
-            visibleChunks.Clear();
+            visibleOpaqueChunks.Clear();
+            visibleWaterChunks.Clear();
 
             if (camera != null)
             {
+                Matrix4 view = camera.GetViewMatrix();
+                Matrix4 proj = camera.GetProjectionMatrix();
+                Matrix4 vp = view * proj;
+                cameraFrustum.Update(vp);
+
                 float renderDistSq = MathF.Pow((ViewDistanceChunks + 1) * Chunk.SIZE_X, 2);
                 Vector3 camPos = camera.Position;
-                Vector3 camForward = camera.Forward;
-
-                float forwardHorizLen = MathF.Sqrt(camForward.X * camForward.X + camForward.Z * camForward.Z);
-                float fwdX = (forwardHorizLen > 0.05f) ? camForward.X / forwardHorizLen : 0f;
-                float fwdZ = (forwardHorizLen > 0.05f) ? camForward.Z / forwardHorizLen : 1f;
 
                 foreach (var chunk in chunks.Values)
                 {
@@ -499,66 +589,64 @@ namespace VoxelRenderEngine.src.World
                     // Skip chunks beyond render distance
                     if (distSq > renderDistSq) continue;
 
-                    // Chunks within 32 blocks are always rendered (covers player feet and looking straight down)
-                    if (distSq > 32f * 32f && forwardHorizLen > 0.05f)
+                    // True 3D Frustum culling (chunks within 24 blocks of player are always rendered)
+                    if (distSq > 24f * 24f)
                     {
-                        // Directional frustum culling: Dot product between horizontal chunk direction and camera forward
-                        float invDist = 1.0f / MathF.Sqrt(distSq);
-                        float dirX = dx * invDist;
-                        float dirZ = dz * invDist;
-
-                        // Dot product < 0.15f corresponds to ~80 degrees off-axis (>160-degree horizontal field of view)
-                        if (dirX * fwdX + dirZ * fwdZ < 0.15f)
+                        Vector3 min = chunk.Position - new Vector3(2f, 0f, 2f);
+                        Vector3 max = new Vector3(chunk.Position.X + Chunk.SIZE_X + 2f, Chunk.SIZE_Y, chunk.Position.Z + Chunk.SIZE_Z + 2f);
+                        if (!cameraFrustum.IsBoxVisible(min, max))
                         {
-                            continue; // Culled! Behind or outside camera view
+                            continue; // Culled! Outside 3D view frustum
                         }
                     }
 
-                    visibleChunks.Add(chunk);
+                    if (chunk.HasOpaqueMesh) visibleOpaqueChunks.Add(chunk);
+                    if (chunk.HasWaterMesh) visibleWaterChunks.Add(chunk);
                 }
             }
             else
             {
                 foreach (var chunk in chunks.Values)
                 {
-                    if (chunk.HasMesh)
-                    {
-                        visibleChunks.Add(chunk);
-                    }
+                    if (chunk.HasOpaqueMesh) visibleOpaqueChunks.Add(chunk);
+                    if (chunk.HasWaterMesh) visibleWaterChunks.Add(chunk);
                 }
             }
 
-            int transLoc = GL.GetUniformLocation(shaderProgram.ID, "isTranslucentPass");
+            int transLoc = TranslucentPassUniformLoc >= 0
+                ? TranslucentPassUniformLoc
+                : GL.GetUniformLocation(shaderProgram.ID, "isTranslucentPass");
 
             // PASS 1: Render all Opaque terrain blocks (depth write ON, blend OFF)
-            // Ensures all solid blocks under water are fully rendered first!
             GL.Uniform1i(transLoc, 0);
             GL.Disable(EnableCap.Blend);
             GL.DepthMask(true);
             GL.DepthFunc(DepthFunction.Less);
 
-            foreach (var chunk in visibleChunks)
+            for (int i = 0; i < visibleOpaqueChunks.Count; i++)
             {
-                chunk.RenderOpaque();
+                visibleOpaqueChunks[i].RenderOpaque();
             }
 
-            // PASS 2: Render Translucent Water & Portal surfaces (depth write OFF, blend ON)
-            // Water blends smoothly on top of the solid blocks underneath!
-            GL.Uniform1i(transLoc, 1);
-            GL.Enable(EnableCap.Blend);
-            GL.BlendFunc(BlendingFactor.SrcAlpha, BlendingFactor.OneMinusSrcAlpha);
-            GL.DepthMask(false);
-            GL.DepthFunc(DepthFunction.Lequal);
-
-            foreach (var chunk in visibleChunks)
+            // PASS 2: Render Translucent Water & Portal surfaces (only if water chunks exist!)
+            if (visibleWaterChunks.Count > 0)
             {
-                chunk.RenderWater();
-            }
+                GL.Uniform1i(transLoc, 1);
+                GL.Enable(EnableCap.Blend);
+                GL.BlendFunc(BlendingFactor.SrcAlpha, BlendingFactor.OneMinusSrcAlpha);
+                GL.DepthMask(false);
+                GL.DepthFunc(DepthFunction.Lequal);
 
-            // Restore standard GL pipeline states
-            GL.DepthMask(true);
-            GL.Disable(EnableCap.Blend);
-            GL.DepthFunc(DepthFunction.Less);
+                for (int i = 0; i < visibleWaterChunks.Count; i++)
+                {
+                    visibleWaterChunks[i].RenderWater();
+                }
+
+                // Restore standard GL pipeline states
+                GL.DepthMask(true);
+                GL.Disable(EnableCap.Blend);
+                GL.DepthFunc(DepthFunction.Less);
+            }
 
             // Render minecarts with the same active shader & texture atlas
             if (Minecarts.Count > 0)
@@ -593,26 +681,55 @@ namespace VoxelRenderEngine.src.World
             lightSources.Clear();
         }
 
-        public List<(Vector3 Position, Vector3 Color, float Radius, float Intensity)> GetActivePointLights(Vector3 playerPos, int maxCount = 15)
+        public List<(Vector3 Position, Vector3 Color, float Radius, float Intensity)> GetActivePointLights(Vector3 playerPos, int maxCount = 15, float deltaTime = 0.016f)
         {
-            activePointLights.Clear();
-            if (lightSources.IsEmpty) return activePointLights;
+            lightQueryTimer += deltaTime;
+            float moveDistSq = Vector3.DistanceSquared(playerPos, lastLightQueryPos);
 
-            lightCandidates.Clear();
-            foreach (var pos in lightSources.Keys)
+            // Re-use cached point lights if player hasn't moved noticeably and timer is small
+            if (moveDistSq < 0.64f && lightQueryTimer < 0.05f && activePointLights.Count > 0)
             {
-                float dx = pos.X + 0.5f - playerPos.X;
-                float dy = pos.Y + 0.5f - playerPos.Y;
-                float dz = pos.Z + 0.5f - playerPos.Z;
-                float distSq = dx * dx + dy * dy + dz * dz;
+                return activePointLights;
+            }
 
-                if (distSq < 625.0f) // Within 25 blocks radius
+            lightQueryTimer = 0f;
+            lastLightQueryPos = playerPos;
+            activePointLights.Clear();
+            lightCandidates.Clear();
+
+            int centerCX = (int)Math.Floor(playerPos.X / Chunk.SIZE_X);
+            int centerCZ = (int)Math.Floor(playerPos.Z / Chunk.SIZE_Z);
+
+            // Fast spatial lookup: only inspect chunks within 2 chunks radius (max 32 blocks of player)
+            for (int dx = -2; dx <= 2; dx++)
+            {
+                for (int dz = -2; dz <= 2; dz++)
                 {
-                    lightCandidates.Add((pos, distSq));
+                    if (chunks.TryGetValue(new Vector2i(centerCX + dx, centerCZ + dz), out var chunk))
+                    {
+                        var lights = chunk.LightPositions;
+                        for (int k = 0; k < lights.Count; k++)
+                        {
+                            var pos = lights[k];
+                            float lx = pos.X + 0.5f - playerPos.X;
+                            float ly = pos.Y + 0.5f - playerPos.Y;
+                            float lz = pos.Z + 0.5f - playerPos.Z;
+                            float distSq = lx * lx + ly * ly + lz * lz;
+
+                            if (distSq < 625.0f) // Within 25 blocks radius
+                            {
+                                lightCandidates.Add((pos, distSq));
+                            }
+                        }
+                    }
                 }
             }
 
-            lightCandidates.Sort((a, b) => a.DistSq.CompareTo(b.DistSq));
+            if (lightCandidates.Count > 1)
+            {
+                lightCandidates.Sort((a, b) => a.DistSq.CompareTo(b.DistSq));
+            }
+
             int count = Math.Min(maxCount, lightCandidates.Count);
 
             for (int i = 0; i < count; i++)
@@ -653,11 +770,11 @@ namespace VoxelRenderEngine.src.World
                     radius = 13.0f;
                     intensity = 1.4f;
                 }
-                else if (blockId == (byte)BlockType.RedstoneTorch || blockId == (byte)BlockType.RedstoneOre)
+                else if (blockId == (byte)BlockType.RedstoneTorch || blockId == (byte)BlockType.RedstoneOre || blockId == (byte)BlockType.RedstoneBlock)
                 {
                     lightColor = new Vector3(1.0f, 0.15f, 0.10f);
-                    radius = 9.0f;
-                    intensity = 1.0f;
+                    radius = 11.0f;
+                    intensity = 1.2f;
                 }
                 else
                 {

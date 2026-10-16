@@ -59,12 +59,17 @@ namespace VoxelRenderEngine.src.Entities
         public int SelectedHotbarSlot { get; set; } = 0;
         public UI.ChestManager? ChestManager { get; set; }
         public Action<Vector3i, UI.Inventory>? OnOpenChest { get; set; }
+        public Action? OnOpenCraftingTable { get; set; }
+        public Action<Vector3i>? OnOpenFurnace { get; set; }
         public Audio.AudioManager? AudioManager { get; set; }
         public Action? OnPortalEntered { get; set; }
 
         public int BlocksBroken { get; set; } = 0;
         public int BlocksPlaced { get; set; } = 0;
         private float footstepTimer = 0f;
+        private bool wasInLiquid = false;
+        private float waterSoundTimer = 0f;
+        private float ladderSoundTimer = 0f;
 
         // Health, Oxygen & Survival state
         public float MaxHealth { get; set; } = 100.0f;
@@ -72,11 +77,12 @@ namespace VoxelRenderEngine.src.Entities
         public float MaxOxygen { get; set; } = 100.0f;
         public float Oxygen { get; set; } = 100.0f;
         public Vector3 SpawnPosition { get; set; }
-        public float FallDistance { get; private set; } = 0f;
+        public float FallDistance { get; set; } = 0f;
 
         public float DamageFlashTimer { get; private set; } = 0f;
         private float drownDamageTimer = 0f;
         private float lavaDamageTimer = 0f;
+        private float cactusDamageTimer = 0f;
         private float timeSinceLastDamage = 10.0f;
 
         private readonly List<AABB> candidateBoxes = new List<AABB>(64);
@@ -90,48 +96,6 @@ namespace VoxelRenderEngine.src.Entities
             Health = MaxHealth;
             Oxygen = MaxOxygen;
             UpdateCamera();
-
-            // Starter items for testing crafting, smelting, placing, chest storage
-            Inventory.Slots[0] = new UI.ItemStack(BlockType.Log, 16);
-            Inventory.Slots[1] = new UI.ItemStack(BlockType.Cobblestone, 32);
-            Inventory.Slots[2] = new UI.ItemStack(BlockType.IronOre, 8);
-            Inventory.Slots[3] = new UI.ItemStack(BlockType.Coal, 16);
-            Inventory.Slots[4] = new UI.ItemStack(BlockType.Sand, 16);
-            Inventory.Slots[5] = new UI.ItemStack(BlockType.Chest, 4);
-            Inventory.Slots[6] = new UI.ItemStack(BlockType.Dirt, 64);
-            Inventory.Slots[7] = new UI.ItemStack(BlockType.CraftingTable, 1);
-            Inventory.Slots[8] = new UI.ItemStack(BlockType.Furnace, 1);
-
-            // Phase 5 & 6 interactive and endgame items
-            Inventory.Slots[9] = new UI.ItemStack(BlockType.Torch, 16);
-            Inventory.Slots[10] = new UI.ItemStack(BlockType.DoorLower, 4);
-            Inventory.Slots[11] = new UI.ItemStack(BlockType.Lever, 4);
-            Inventory.Slots[12] = new UI.ItemStack(BlockType.StoneButton, 4);
-            Inventory.Slots[13] = new UI.ItemStack(BlockType.Rail, 32);
-            Inventory.Slots[14] = new UI.ItemStack(BlockType.PoweredRail, 16);
-            Inventory.Slots[15] = new UI.ItemStack(BlockType.MinecartItem, 2);
-            Inventory.Slots[16] = new UI.ItemStack(BlockType.Obsidian, 14);
-            Inventory.Slots[17] = new UI.ItemStack(BlockType.FlintAndSteel, 1);
-
-            // New atlas block showcase items for creative testing
-            Inventory.Slots[18] = new UI.ItemStack(BlockType.Glowstone, 64);
-            Inventory.Slots[19] = new UI.ItemStack(BlockType.JackOLantern, 64);
-            Inventory.Slots[20] = new UI.ItemStack(BlockType.TNT, 64);
-            Inventory.Slots[21] = new UI.ItemStack(BlockType.Bookshelf, 64);
-            Inventory.Slots[22] = new UI.ItemStack(BlockType.Bricks, 64);
-            Inventory.Slots[23] = new UI.ItemStack(BlockType.MossyCobblestone, 64);
-            Inventory.Slots[24] = new UI.ItemStack(BlockType.DiamondBlock, 64);
-            Inventory.Slots[25] = new UI.ItemStack(BlockType.GoldBlock, 64);
-            Inventory.Slots[26] = new UI.ItemStack(BlockType.LapisBlock, 64);
-            Inventory.Slots[27] = new UI.ItemStack(BlockType.Ice, 64);
-            Inventory.Slots[28] = new UI.ItemStack(BlockType.Cactus, 64);
-            Inventory.Slots[29] = new UI.ItemStack(BlockType.Rose, 64);
-            Inventory.Slots[30] = new UI.ItemStack(BlockType.RedWool, 64);
-            Inventory.Slots[31] = new UI.ItemStack(BlockType.BlueWool, 64);
-            Inventory.Slots[32] = new UI.ItemStack(BlockType.LimeWool, 64);
-            Inventory.Slots[33] = new UI.ItemStack(BlockType.Cake, 64);
-            Inventory.Slots[34] = new UI.ItemStack(BlockType.Jukebox, 64);
-            Inventory.Slots[35] = new UI.ItemStack(BlockType.MonsterSpawner, 64);
         }
 
         public AABB GetAABB()
@@ -179,7 +143,7 @@ namespace VoxelRenderEngine.src.Entities
 
                     UpdateCamera();
                     UpdateRaycast(world);
-                    HandleBlockInteractions(world, mouse, deltaTime);
+                    HandleBlockInteractions(world, keyboard, mouse, deltaTime);
                     RedstoneSystem.Update(world, deltaTime);
                     UpdateItemDrops(world, deltaTime);
                     UpdateHealthAndOxygen(world, deltaTime);
@@ -200,7 +164,7 @@ namespace VoxelRenderEngine.src.Entities
 
             UpdateCamera();
             UpdateRaycast(world);
-            HandleBlockInteractions(world, mouse, deltaTime);
+            HandleBlockInteractions(world, keyboard, mouse, deltaTime);
             RedstoneSystem.Update(world, deltaTime);
             UpdateItemDrops(world, deltaTime);
             UpdateHealthAndOxygen(world, deltaTime);
@@ -278,8 +242,22 @@ namespace VoxelRenderEngine.src.Entities
             int footX = (int)Math.Floor(Position.X);
             int footY = (int)Math.Floor(Position.Y + 0.2f);
             int footZ = (int)Math.Floor(Position.Z);
+            int bodyY = (int)Math.Floor(Position.Y + 0.9f);
             byte footBlock = world.GetBlockWorld(footX, footY, footZ);
-            bool inLiquid = (footBlock == (byte)BlockType.Water || footBlock == (byte)BlockType.Lava);
+            byte bodyBlock = world.GetBlockWorld(footX, bodyY, footZ);
+            bool inLiquid = (footBlock == (byte)BlockType.Water || footBlock == (byte)BlockType.Lava ||
+                            bodyBlock == (byte)BlockType.Water || bodyBlock == (byte)BlockType.Lava);
+            bool isWater = (footBlock == (byte)BlockType.Water || bodyBlock == (byte)BlockType.Water);
+
+            // Splash sound on entering water
+            if (inLiquid && !wasInLiquid)
+            {
+                if (isWater)
+                {
+                    AudioManager?.PlayCategorySound("water", volume: 0.85f, pitchVariance: 0.15f);
+                }
+            }
+            wasInLiquid = inLiquid;
 
             if (inLiquid)
             {
@@ -324,83 +302,173 @@ namespace VoxelRenderEngine.src.Entities
                 FallDistance = 0f; // Liquid cushions and prevents all fall damage
                 Velocity = new Vector3(vx, vy, vz);
 
+                // Play water swimming / paddling sound
+                if (isWater)
+                {
+                    bool isMoving = (wishDir.LengthSquared > 0.001f) || Math.Abs(Velocity.Y) > 0.6f;
+                    if (isMoving)
+                    {
+                        waterSoundTimer += deltaTime;
+                        if (waterSoundTimer > 0.42f)
+                        {
+                            waterSoundTimer = 0f;
+                            AudioManager?.PlayCategorySound("water", volume: 0.70f, pitchVariance: 0.15f);
+                        }
+                    }
+                    else
+                    {
+                        waterSoundTimer = 0.35f;
+                    }
+                }
+
                 MoveWithCollision(world, Velocity * deltaTime);
                 ClampToWorldBounds();
                 return;
             }
-            else
+
+            // Check ladder interaction (bounding box query)
+            bool onLadder = false;
+            int ladderMinX = (int)Math.Floor(Position.X - Width * 0.5f);
+            int ladderMaxX = (int)Math.Floor(Position.X + Width * 0.5f);
+            int ladderMinY = (int)Math.Floor(Position.Y);
+            int ladderMaxY = (int)Math.Floor(Position.Y + Height);
+            int ladderMinZ = (int)Math.Floor(Position.Z - Width * 0.5f);
+            int ladderMaxZ = (int)Math.Floor(Position.Z + Width * 0.5f);
+
+            for (int lx = ladderMinX; lx <= ladderMaxX && !onLadder; lx++)
             {
-                bool wasGrounded = IsGrounded;
-                float startY = Position.Y;
-
-                // Apply normal gravity
-                vy = Velocity.Y - (Gravity * deltaTime);
-
-                // Jumping
-                if (IsGrounded && keyboard.IsKeyDown(Keys.Space))
+                for (int ly = ladderMinY; ly <= ladderMaxY && !onLadder; ly++)
                 {
-                    vy = JumpForce;
-                    IsGrounded = false;
-                    AudioManager?.PlayPlayerJump();
-                }
-
-                Velocity = new Vector3(vx, vy, vz);
-
-                // Move and collide against voxel terrain
-                MoveWithCollision(world, Velocity * deltaTime);
-                ClampToWorldBounds();
-
-                float endY = Position.Y;
-                float dropThisFrame = startY - endY;
-
-                if (dropThisFrame > 0f)
-                {
-                    FallDistance += dropThisFrame;
-                }
-                else if (Velocity.Y > 0f)
-                {
-                    // Jumping upwards or climbing up, reset fall counter
-                    FallDistance = 0f;
-                }
-
-                // Landing sound & Fall Damage
-                if (!wasGrounded && IsGrounded)
-                {
-                    AudioManager?.PlayPlayerLand();
-
-                    // Fall damage occurs only after falling more than 3 blocks (say after the height of 3 blocks)
-                    if (FallDistance > 3.0f)
+                    for (int lz = ladderMinZ; lz <= ladderMaxZ && !onLadder; lz++)
                     {
-                        float excessBlocks = FallDistance - 3.0f;
-                        float damage = excessBlocks * 10.0f;
-                        TakeDamage(damage, "fall", world);
+                        if (world.GetBlockWorld(lx, ly, lz) == (byte)BlockType.Ladder)
+                        {
+                            onLadder = true;
+                        }
                     }
-                    FallDistance = 0f;
                 }
-                else if (IsGrounded)
+            }
+
+            if (onLadder)
+            {
+                float ladderVy = 0f;
+                if (keyboard.IsKeyDown(Keys.W) || keyboard.IsKeyDown(Keys.Space))
                 {
-                    FallDistance = 0f;
+                    ladderVy = 3.2f; // Climb up ladder
+                }
+                else if (keyboard.IsKeyDown(Keys.S))
+                {
+                    ladderVy = -2.8f; // Climb down ladder
+                }
+                else if (keyboard.IsKeyDown(Keys.LeftShift) || keyboard.IsKeyDown(Keys.RightShift))
+                {
+                    ladderVy = 0f; // Hold position / stationary hang
+                }
+                else
+                {
+                    ladderVy = -1.0f; // Gentle slow slide
                 }
 
-                // Footstep sounds
-                if (IsGrounded && (vx * vx + vz * vz > 0.4f))
+                FallDistance = 0f; // Ladders cushion all fall damage
+                Velocity = new Vector3(vx * 0.6f, ladderVy, vz * 0.6f);
+
+                if (Math.Abs(ladderVy) > 0.4f || (vx * vx + vz * vz > 0.1f))
                 {
-                    footstepTimer += deltaTime;
-                    if (footstepTimer > 0.38f)
+                    ladderSoundTimer += deltaTime;
+                    if (ladderSoundTimer > 0.35f)
                     {
-                        footstepTimer = 0f;
-                        int groundX = (int)Math.Floor(Position.X);
-                        int groundY = (int)Math.Floor(Position.Y - 0.2f);
-                        int groundZ = (int)Math.Floor(Position.Z);
-                        byte groundBlock = world.GetBlockWorld(groundX, groundY, groundZ);
-                        AudioManager?.PlayBlockStepSound((BlockType)groundBlock);
+                        ladderSoundTimer = 0f;
+                        AudioManager?.PlayCategorySound("wood", volume: 0.5f, pitchVariance: 0.1f);
                     }
                 }
                 else
                 {
-                    footstepTimer = 0.25f;
+                    ladderSoundTimer = 0.25f;
                 }
+
+                MoveWithCollision(world, Velocity * deltaTime);
+                ClampToWorldBounds();
                 return;
+            }
+
+            bool wasGrounded = IsGrounded;
+            float startY = Position.Y;
+
+            // Apply normal gravity
+            vy = Velocity.Y - (Gravity * deltaTime);
+
+            // Jumping
+            if (IsGrounded && keyboard.IsKeyDown(Keys.Space))
+            {
+                vy = JumpForce;
+                IsGrounded = false;
+                AudioManager?.PlayPlayerJump();
+            }
+
+            Velocity = new Vector3(vx, vy, vz);
+
+            // Move and collide against voxel terrain
+            MoveWithCollision(world, Velocity * deltaTime);
+            ClampToWorldBounds();
+
+            float endY = Position.Y;
+            float dropThisFrame = startY - endY;
+
+            if (dropThisFrame > 0f)
+            {
+                FallDistance += dropThisFrame;
+            }
+            else if (Velocity.Y > 0f)
+            {
+                // Jumping upwards or climbing up, reset fall counter
+                FallDistance = 0f;
+            }
+
+            // Landing sound & Fall Damage
+            if (!wasGrounded && IsGrounded)
+            {
+                AudioManager?.PlayPlayerLand();
+
+                // Fall damage occurs only after falling more than 3 blocks (say after the height of 3 blocks)
+                if (FallDistance > 3.0f)
+                {
+                    float excessBlocks = FallDistance - 3.0f;
+                    float damage = excessBlocks * 10.0f;
+                    TakeDamage(damage, "fall", world);
+                }
+                FallDistance = 0f;
+            }
+            else if (IsGrounded)
+            {
+                FallDistance = 0f;
+            }
+
+            // Footstep sounds
+            if (IsGrounded && (vx * vx + vz * vz > 0.4f))
+            {
+                footstepTimer += deltaTime;
+                if (footstepTimer > 0.38f)
+                {
+                    footstepTimer = 0f;
+                    int groundX = (int)Math.Floor(Position.X);
+                    int groundY = (int)Math.Floor(Position.Y - 0.2f);
+                    int groundZ = (int)Math.Floor(Position.Z);
+                    byte groundBlock = world.GetBlockWorld(groundX, groundY, groundZ);
+
+                    // If wading in shallow water, play water sound
+                    if (footBlock == (byte)BlockType.Water)
+                    {
+                        AudioManager?.PlayCategorySound("water", volume: 0.60f, pitchVariance: 0.15f);
+                    }
+                    else
+                    {
+                        AudioManager?.PlayBlockStepSound((BlockType)groundBlock);
+                    }
+                }
+            }
+            else
+            {
+                footstepTimer = 0.25f;
             }
         }
 
@@ -565,7 +633,7 @@ namespace VoxelRenderEngine.src.Entities
         }
 
         private bool rightClickWasDown = false;
-        private void HandleBlockInteractions(World.World world, MouseState mouse, float deltaTime)
+        private void HandleBlockInteractions(World.World world, KeyboardState keyboard, MouseState mouse, float deltaTime)
         {
             // 0. Interaction with Minecart Entities
             if (TargetedMinecart != null)
@@ -735,13 +803,94 @@ namespace VoxelRenderEngine.src.Entities
                     var bp = TargetedBlock.Value;
                     byte blockId = world.GetBlockWorld(bp.X, bp.Y, bp.Z);
 
+                    bool isShiftDown = keyboard.IsKeyDown(Keys.LeftShift) || keyboard.IsKeyDown(Keys.RightShift);
+
+                    // In-place Block Rotation (Shift + Right Click on placed directional block or rail)
+                    if (isShiftDown)
+                    {
+                        if (blockId == (byte)BlockType.Chest)
+                        {
+                            if (VoxelRenderEngine.src.UI.ChestManager.TryGetDoubleChestPartner(bp, (x, y, z) => world.GetBlockWorld(x, y, z), out var partnerPos, out _, out bool isAxisX))
+                            {
+                                byte currentMeta = world.GetBlockMetadata(bp.X, bp.Y, bp.Z);
+                                byte nextMeta;
+                                if (isAxisX)
+                                {
+                                    nextMeta = (currentMeta == (byte)BlockFacing.South) ? (byte)BlockFacing.North : (byte)BlockFacing.South;
+                                }
+                                else
+                                {
+                                    nextMeta = (currentMeta == (byte)BlockFacing.West) ? (byte)BlockFacing.East : (byte)BlockFacing.West;
+                                }
+                                world.SetBlockMetadata(bp.X, bp.Y, bp.Z, nextMeta);
+                                world.SetBlockMetadata(partnerPos.X, partnerPos.Y, partnerPos.Z, nextMeta);
+                                AudioManager?.PlayCategorySound("wood", volume: 0.5f, pitchVariance: 0.1f);
+                                rightClickWasDown = true;
+                                return;
+                            }
+                            else
+                            {
+                                byte currentMeta = world.GetBlockMetadata(bp.X, bp.Y, bp.Z);
+                                byte nextMeta = (byte)((currentMeta + 1) % 4);
+                                world.SetBlockMetadata(bp.X, bp.Y, bp.Z, nextMeta);
+                                AudioManager?.PlayCategorySound("wood", volume: 0.5f, pitchVariance: 0.1f);
+                                rightClickWasDown = true;
+                                return;
+                            }
+                        }
+                        else if (BlockRegistry.IsDirectionalBlock((BlockType)blockId))
+                        {
+                            byte currentMeta = world.GetBlockMetadata(bp.X, bp.Y, bp.Z);
+                            byte nextMeta = (byte)((currentMeta + 1) % 4);
+                            world.SetBlockMetadata(bp.X, bp.Y, bp.Z, nextMeta);
+                            AudioManager?.PlayCategorySound("wood", volume: 0.5f, pitchVariance: 0.1f);
+                            rightClickWasDown = true;
+                            return;
+                        }
+                        else if (BlockRegistry.IsRailBlock(blockId))
+                        {
+                            byte currentMeta = world.GetBlockMetadata(bp.X, bp.Y, bp.Z);
+                            int maxShapes = (blockId == (byte)BlockType.Rail) ? 6 : 2;
+                            byte nextMeta = (byte)((currentMeta + 1) % maxShapes);
+                            world.SetBlockMetadata(bp.X, bp.Y, bp.Z, nextMeta);
+                            AudioManager?.PlayCategorySound("stone", volume: 0.5f, pitchVariance: 0.1f);
+                            rightClickWasDown = true;
+                            return;
+                        }
+                    }
+
                     // A. Chest interaction
                     if (blockId == (byte)BlockType.Chest)
                     {
                         if (ChestManager != null && OnOpenChest != null)
                         {
-                            var chestInv = ChestManager.GetOrCreateChest(bp);
+                            var chestInv = ChestManager.GetChestInventory(bp, world);
                             OnOpenChest.Invoke(bp, chestInv);
+                            AudioManager?.PlayCategorySound("wood", volume: 0.8f, pitchVariance: 0.1f);
+                            rightClickWasDown = true;
+                            return;
+                        }
+                    }
+
+                    // A2. Crafting Table interaction
+                    if (blockId == (byte)BlockType.CraftingTable)
+                    {
+                        if (OnOpenCraftingTable != null)
+                        {
+                            OnOpenCraftingTable.Invoke();
+                            AudioManager?.PlayCategorySound("wood", volume: 0.7f);
+                            rightClickWasDown = true;
+                            return;
+                        }
+                    }
+
+                    // A3. Furnace interaction
+                    if (blockId == (byte)BlockType.Furnace || blockId == (byte)BlockType.LitFurnace)
+                    {
+                        if (OnOpenFurnace != null)
+                        {
+                            OnOpenFurnace.Invoke(bp);
+                            AudioManager?.PlayCategorySound("concrete", volume: 0.7f);
                             rightClickWasDown = true;
                             return;
                         }
@@ -832,7 +981,109 @@ namespace VoxelRenderEngine.src.Entities
                                     toPlace = BlockType.PoweredRailOn;
                                 }
 
-                                world.SetBlockWorld(pb.X, pb.Y, pb.Z, toPlace);
+                                byte metadata = 0;
+                                if (toPlace == BlockType.Chest)
+                                {
+                                    // Check if placing next to an existing chest (the first chest)
+                                    Vector3i[] chestNeighbors = new Vector3i[]
+                                    {
+                                        new Vector3i(pb.X + 1, pb.Y, pb.Z),
+                                        new Vector3i(pb.X - 1, pb.Y, pb.Z),
+                                        new Vector3i(pb.X, pb.Y, pb.Z + 1),
+                                        new Vector3i(pb.X, pb.Y, pb.Z - 1)
+                                    };
+
+                                    bool foundFirstChest = false;
+                                    foreach (var n in chestNeighbors)
+                                    {
+                                        if (world.GetBlockWorld(n.X, n.Y, n.Z) == (byte)BlockType.Chest)
+                                        {
+                                            byte firstFacing = world.GetBlockMetadata(n.X, n.Y, n.Z);
+                                            bool isAxisX = (pb.X != n.X);
+
+                                            if (isAxisX)
+                                            {
+                                                // Placed along X: large chest faces South (0) or North (1)
+                                                metadata = (firstFacing == (byte)BlockFacing.North)
+                                                    ? (byte)BlockFacing.North
+                                                    : (byte)BlockFacing.South;
+                                            }
+                                            else
+                                            {
+                                                // Placed along Z: large chest faces West (2) or East (3)
+                                                metadata = (firstFacing == (byte)BlockFacing.East)
+                                                    ? (byte)BlockFacing.East
+                                                    : (byte)BlockFacing.West;
+                                            }
+
+                                            // Sync first chest's metadata to ensure both halves match the direction of the first chest!
+                                            world.SetBlockMetadata(n.X, n.Y, n.Z, metadata);
+                                            foundFirstChest = true;
+                                            break;
+                                        }
+                                    }
+
+                                    if (!foundFirstChest)
+                                    {
+                                        // Standalone chest faces towards player:
+                                        if (MathF.Abs(Camera.Forward.Z) > MathF.Abs(Camera.Forward.X))
+                                        {
+                                            metadata = Camera.Forward.Z < 0 ? (byte)BlockFacing.South : (byte)BlockFacing.North;
+                                        }
+                                        else
+                                        {
+                                            metadata = Camera.Forward.X < 0 ? (byte)BlockFacing.East : (byte)BlockFacing.West;
+                                        }
+                                    }
+                                }
+                                else if (BlockRegistry.IsDirectionalBlock(toPlace))
+                                {
+                                    // Block faces towards player:
+                                    if (MathF.Abs(Camera.Forward.Z) > MathF.Abs(Camera.Forward.X))
+                                    {
+                                        metadata = Camera.Forward.Z < 0 ? (byte)BlockFacing.South : (byte)BlockFacing.North;
+                                    }
+                                    else
+                                    {
+                                        metadata = Camera.Forward.X < 0 ? (byte)BlockFacing.East : (byte)BlockFacing.West;
+                                    }
+                                }
+                                else if (BlockRegistry.IsRailBlock(toPlace))
+                                {
+                                    bool hasNorth = BlockRegistry.IsRailBlock(world.GetBlockWorld(pb.X, pb.Y, pb.Z - 1));
+                                    bool hasSouth = BlockRegistry.IsRailBlock(world.GetBlockWorld(pb.X, pb.Y, pb.Z + 1));
+                                    bool hasWest = BlockRegistry.IsRailBlock(world.GetBlockWorld(pb.X - 1, pb.Y, pb.Z));
+                                    bool hasEast = BlockRegistry.IsRailBlock(world.GetBlockWorld(pb.X + 1, pb.Y, pb.Z));
+
+                                    if (toPlace == BlockType.Rail)
+                                    {
+                                        if (hasSouth && hasEast) metadata = (byte)RailShape.SouthEast;
+                                        else if (hasSouth && hasWest) metadata = (byte)RailShape.SouthWest;
+                                        else if (hasNorth && hasWest) metadata = (byte)RailShape.NorthWest;
+                                        else if (hasNorth && hasEast) metadata = (byte)RailShape.NorthEast;
+                                        else if (hasNorth || hasSouth) metadata = (byte)RailShape.NorthSouth;
+                                        else if (hasEast || hasWest) metadata = (byte)RailShape.EastWest;
+                                        else
+                                        {
+                                            metadata = MathF.Abs(Camera.Forward.Z) > MathF.Abs(Camera.Forward.X)
+                                                ? (byte)RailShape.NorthSouth
+                                                : (byte)RailShape.EastWest;
+                                        }
+                                    }
+                                    else
+                                    {
+                                        if (hasNorth || hasSouth) metadata = (byte)RailShape.NorthSouth;
+                                        else if (hasEast || hasWest) metadata = (byte)RailShape.EastWest;
+                                        else
+                                        {
+                                            metadata = MathF.Abs(Camera.Forward.Z) > MathF.Abs(Camera.Forward.X)
+                                                ? (byte)RailShape.NorthSouth
+                                                : (byte)RailShape.EastWest;
+                                        }
+                                    }
+                                }
+
+                                world.SetBlockWorld(pb.X, pb.Y, pb.Z, toPlace, metadata);
                                 if (toPlace == BlockType.Water || toPlace == BlockType.Lava)
                                 {
                                     world.FluidSystem.TriggerFlow(world, pb, toPlace);
@@ -918,9 +1169,57 @@ namespace VoxelRenderEngine.src.Entities
                 lavaDamageTimer = 0.45f; // Prime for quick reaction when stepping into lava
             }
 
-            // 3. PASSIVE HEALING
+            // 3. CACTUS CHECK (Touching or standing on cactus blocks)
+            AABB pBox = GetAABB();
+            float skin = 0.08f;
+            AABB touchBox = new AABB(pBox.Min.X - skin, pBox.Min.Y - skin, pBox.Min.Z - skin,
+                                     pBox.Max.X + skin, pBox.Max.Y + skin, pBox.Max.Z + skin);
+
+            int minCX = (int)MathF.Floor(touchBox.Min.X - 0.5f);
+            int maxCX = (int)MathF.Ceiling(touchBox.Max.X + 0.5f);
+            int minCY = (int)MathF.Floor(touchBox.Min.Y - 0.5f);
+            int maxCY = (int)MathF.Ceiling(touchBox.Max.Y + 0.5f);
+            int minCZ = (int)MathF.Floor(touchBox.Min.Z - 0.5f);
+            int maxCZ = (int)MathF.Ceiling(touchBox.Max.Z + 0.5f);
+
+            bool isTouchingCactus = false;
+            for (int x = minCX; x <= maxCX; x++)
+            {
+                for (int y = minCY; y <= maxCY; y++)
+                {
+                    for (int z = minCZ; z <= maxCZ; z++)
+                    {
+                        if (world.GetBlockWorld(x, y, z) == (byte)BlockType.Cactus)
+                        {
+                            AABB cactusBox = new AABB(x - 0.5f, y - 0.5f, z - 0.5f, x + 0.5f, y + 0.5f, z + 0.5f);
+                            if (touchBox.Intersects(cactusBox))
+                            {
+                                isTouchingCactus = true;
+                                goto DoneCactusCheck;
+                            }
+                        }
+                    }
+                }
+            }
+        DoneCactusCheck:
+
+            if (isTouchingCactus)
+            {
+                cactusDamageTimer += deltaTime;
+                if (cactusDamageTimer >= 0.5f)
+                {
+                    cactusDamageTimer = 0f;
+                    TakeDamage(10.0f, "cactus", world);
+                }
+            }
+            else
+            {
+                cactusDamageTimer = 0.45f; // Prime for quick reaction when touching cactus
+            }
+
+            // 4. PASSIVE HEALING
             // Only heals after 10 seconds of receiving damage
-            if (Health < MaxHealth && Health > 0f && timeSinceLastDamage >= 10.0f && !isInLava && !isHeadInWater)
+            if (Health < MaxHealth && Health > 0f && timeSinceLastDamage >= 10.0f && !isInLava && !isHeadInWater && !isTouchingCactus)
             {
                 Health = MathF.Min(MaxHealth, Health + 6.0f * deltaTime);
             }

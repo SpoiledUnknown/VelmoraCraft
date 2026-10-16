@@ -16,6 +16,7 @@ namespace VoxelRenderEngine.src.World
         // Flat array indexed as: x + (z * SIZE_X) + (y * SIZE_X * SIZE_Z)
         // 16 * 128 * 16 bytes = 32,768 bytes (32 KB per chunk)
         public byte[] Blocks { get; } = new byte[SIZE_X * SIZE_Y * SIZE_Z];
+        private readonly Dictionary<int, byte> blockMetadata = new Dictionary<int, byte>();
 
         public bool IsMeshDirty { get; set; } = true;
         public bool IsGeneratingMesh { get; set; } = false;
@@ -26,6 +27,10 @@ namespace VoxelRenderEngine.src.World
         public bool HasWaterMesh => waterIndexCount > 0 && chunkVAO != null && ibo != null;
         public int OpaqueIndexCount => opaqueIndexCount;
         public int WaterIndexCount => waterIndexCount;
+
+        public readonly List<Vector3i> LightPositions = new List<Vector3i>();
+        public Vector3 MinBounds => Position;
+        public Vector3 MaxBounds => new Vector3(Position.X + SIZE_X, SIZE_Y, Position.Z + SIZE_Z);
 
         private VertexArrayObject? chunkVAO;
         private VertexBufferObject? vbo;
@@ -62,7 +67,41 @@ namespace VoxelRenderEngine.src.World
         {
             if (x >= 0 && x < SIZE_X && y >= 0 && y < SIZE_Y && z >= 0 && z < SIZE_Z)
             {
-                Blocks[GetBlockIndex(x, y, z)] = (byte)type;
+                int idx = GetBlockIndex(x, y, z);
+                Blocks[idx] = (byte)type;
+                if (type == BlockType.Empty)
+                {
+                    blockMetadata.Remove(idx);
+                }
+                IsMeshDirty = true;
+            }
+        }
+
+        [System.Runtime.CompilerServices.MethodImpl(System.Runtime.CompilerServices.MethodImplOptions.AggressiveInlining)]
+        public byte GetMetadata(int x, int y, int z)
+        {
+            if (x < 0 || x >= SIZE_X || y < 0 || y >= SIZE_Y || z < 0 || z >= SIZE_Z)
+            {
+                return 0;
+            }
+            int idx = GetBlockIndex(x, y, z);
+            return blockMetadata.TryGetValue(idx, out byte meta) ? meta : (byte)0;
+        }
+
+        [System.Runtime.CompilerServices.MethodImpl(System.Runtime.CompilerServices.MethodImplOptions.AggressiveInlining)]
+        public void SetMetadata(int x, int y, int z, byte data)
+        {
+            if (x >= 0 && x < SIZE_X && y >= 0 && y < SIZE_Y && z >= 0 && z < SIZE_Z)
+            {
+                int idx = GetBlockIndex(x, y, z);
+                if (data == 0)
+                {
+                    blockMetadata.Remove(idx);
+                }
+                else
+                {
+                    blockMetadata[idx] = data;
+                }
                 IsMeshDirty = true;
             }
         }
@@ -97,10 +136,9 @@ namespace VoxelRenderEngine.src.World
 
         public void RenderOpaque()
         {
-            if (opaqueIndexCount == 0 || chunkVAO == null || ibo == null) return;
+            if (opaqueIndexCount == 0 || chunkVAO == null) return;
 
             chunkVAO.Bind();
-            ibo.Bind();
             GL.DrawElements(
                 PrimitiveType.Triangles,
                 opaqueIndexCount,
@@ -111,10 +149,9 @@ namespace VoxelRenderEngine.src.World
 
         public void RenderWater()
         {
-            if (waterIndexCount == 0 || chunkVAO == null || ibo == null) return;
+            if (waterIndexCount == 0 || chunkVAO == null) return;
 
             chunkVAO.Bind();
-            ibo.Bind();
             GL.DrawElements(
                 PrimitiveType.Triangles,
                 waterIndexCount,
@@ -141,6 +178,7 @@ namespace VoxelRenderEngine.src.World
             indexCount = 0;
             opaqueIndexCount = 0;
             waterIndexCount = 0;
+            LightPositions.Clear();
         }
     }
 }
