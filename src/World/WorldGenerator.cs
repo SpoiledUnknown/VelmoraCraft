@@ -364,7 +364,12 @@ namespace VoxelRenderEngine.src.World
 
                     if (groundBlock == (byte)BlockType.Grass && world.GetBlockWorld(wx, surface + 1, wz) == (byte)BlockType.Empty)
                     {
-                        if (floraHash % 45 == 0)
+                        if (floraHash % 7 == 0)
+                        {
+                            // Tall grass patches across meadows and hills
+                            world.SetBlockWorld(wx, surface + 1, wz, BlockType.TallGrass);
+                        }
+                        else if (floraHash % 45 == 0)
                         {
                             // Red Rose or Yellow Dandelion
                             BlockType flower = (floraHash % 2 == 0) ? BlockType.Rose : BlockType.Dandelion;

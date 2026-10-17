@@ -63,6 +63,7 @@ namespace VoxelRenderEngine.src.Entities
         public Action<Vector3i>? OnOpenFurnace { get; set; }
         public Audio.AudioManager? AudioManager { get; set; }
         public Action? OnPortalEntered { get; set; }
+        public Action<Vector3i>? OnUseBed { get; set; }
 
         public int BlocksBroken { get; set; } = 0;
         public int BlocksPlaced { get; set; } = 0;
@@ -76,6 +77,10 @@ namespace VoxelRenderEngine.src.Entities
         public float Health { get; set; } = 100.0f;
         public float MaxOxygen { get; set; } = 100.0f;
         public float Oxygen { get; set; } = 100.0f;
+        public float MaxStamina { get; set; } = 100.0f;
+        public float Stamina { get; set; } = 100.0f;
+        public bool IsSprinting { get; private set; } = false;
+        public bool IsUnderwater { get; private set; } = false;
         public Vector3 SpawnPosition { get; set; }
         public float FallDistance { get; set; } = 0f;
 
@@ -95,6 +100,7 @@ namespace VoxelRenderEngine.src.Entities
             Camera = camera;
             Health = MaxHealth;
             Oxygen = MaxOxygen;
+            Stamina = MaxStamina;
             UpdateCamera();
         }
 
@@ -141,6 +147,8 @@ namespace VoxelRenderEngine.src.Entities
                         CurrentMinecart.Velocity *= MathF.Pow(0.1f, deltaTime);
                     }
 
+                    IsSprinting = false;
+                    Camera.CurrentFov = MathHelper.Lerp(Camera.CurrentFov, Camera.BaseFov, Math.Min(1.0f, deltaTime * 8.0f));
                     UpdateCamera();
                     UpdateRaycast(world);
                     HandleBlockInteractions(world, keyboard, mouse, deltaTime);
@@ -155,12 +163,17 @@ namespace VoxelRenderEngine.src.Entities
 
             if (IsFlying)
             {
+                IsSprinting = false;
                 UpdateFlyMovement(keyboard, deltaTime);
             }
             else
             {
                 UpdateWalkMovement(world, keyboard, deltaTime);
             }
+
+            // Smooth FOV increase when sprinting (a little more than the set FOV, +10 degrees)
+            float targetFov = IsSprinting ? (Camera.BaseFov + 10.0f) : Camera.BaseFov;
+            Camera.CurrentFov = MathHelper.Lerp(Camera.CurrentFov, targetFov, Math.Min(1.0f, deltaTime * 8.0f));
 
             UpdateCamera();
             UpdateRaycast(world);
@@ -235,9 +248,6 @@ namespace VoxelRenderEngine.src.Entities
 
         private void UpdateWalkMovement(World.World world, KeyboardState keyboard, float deltaTime)
         {
-            float speed = MoveSpeed;
-            if (keyboard.IsKeyDown(Keys.LeftControl)) speed *= SprintMultiplier;
-
             // Check if player is standing/swimming in water or lava
             int footX = (int)Math.Floor(Position.X);
             int footY = (int)Math.Floor(Position.Y + 0.2f);
@@ -249,6 +259,14 @@ namespace VoxelRenderEngine.src.Entities
                             bodyBlock == (byte)BlockType.Water || bodyBlock == (byte)BlockType.Lava);
             bool isWater = (footBlock == (byte)BlockType.Water || bodyBlock == (byte)BlockType.Water);
 
+            // Eye / head submerged check
+            int eyeX = (int)Math.Floor(Position.X);
+            int eyeY = (int)Math.Floor(Position.Y + EyeHeight);
+            int eyeZ = (int)Math.Floor(Position.Z);
+            byte eyeBlock = world.GetBlockWorld(eyeX, eyeY, eyeZ);
+            bool isHeadInWater = (eyeBlock == (byte)BlockType.Water);
+            IsUnderwater = isHeadInWater || (isWater && Oxygen < MaxOxygen * 0.99f);
+
             // Splash sound on entering water
             if (inLiquid && !wasInLiquid)
             {
@@ -258,11 +276,6 @@ namespace VoxelRenderEngine.src.Entities
                 }
             }
             wasInLiquid = inLiquid;
-
-            if (inLiquid)
-            {
-                speed *= 0.65f;
-            }
 
             // Planar movement (horizontal only)
             Vector3 forwardPlanar = Vector3.Normalize(new Vector3(Camera.Forward.X, 0, Camera.Forward.Z));
@@ -279,6 +292,41 @@ namespace VoxelRenderEngine.src.Entities
                 wishDir = Vector3.Normalize(wishDir);
             }
 
+            // Sprint key handling (Shift or Ctrl key)
+            bool sprintKey = keyboard.IsKeyDown(Keys.LeftShift) || keyboard.IsKeyDown(Keys.RightShift) || keyboard.IsKeyDown(Keys.LeftControl);
+            bool isMovingHorizontally = wishDir.LengthSquared > 0.001f;
+            float speed = MoveSpeed;
+
+            if (inLiquid)
+            {
+                // Underwater: sprint is unlimited! Stamina does not deplete
+                IsSprinting = sprintKey && (isMovingHorizontally || keyboard.IsKeyDown(Keys.Space) || keyboard.IsKeyDown(Keys.LeftShift));
+                if (IsSprinting)
+                {
+                    speed *= SprintMultiplier;
+                }
+                // Passive stamina recovery while in water
+                Stamina = MathF.Min(MaxStamina, Stamina + (MaxStamina / 8.0f) * deltaTime);
+                speed *= 0.65f;
+            }
+            else
+            {
+                // On land: sprint lasts 30s and recharges in 8s
+                if (sprintKey && isMovingHorizontally && Stamina > 0.5f)
+                {
+                    IsSprinting = true;
+                    speed *= SprintMultiplier;
+                    // Drain stamina from 100 to 0 over 30 seconds
+                    Stamina = MathF.Max(0f, Stamina - (MaxStamina / 30.0f) * deltaTime);
+                }
+                else
+                {
+                    IsSprinting = false;
+                    // Recharge stamina from 0 to 100 over 8 seconds
+                    Stamina = MathF.Min(MaxStamina, Stamina + (MaxStamina / 8.0f) * deltaTime);
+                }
+            }
+
             // Apply horizontal acceleration
             Vector3 targetVel = wishDir * speed;
             float horizontalLerp = inLiquid ? 6.0f : (IsGrounded ? 12.0f : 2.5f);
@@ -292,11 +340,11 @@ namespace VoxelRenderEngine.src.Entities
                 vy = MathHelper.Lerp(Velocity.Y, -1.8f, 4.0f * deltaTime);
                 if (keyboard.IsKeyDown(Keys.Space))
                 {
-                    vy = 3.8f; // Swim upwards
+                    vy = IsSprinting ? 5.0f : 3.8f; // Swim upwards faster with sprint
                 }
                 else if (keyboard.IsKeyDown(Keys.LeftShift))
                 {
-                    vy = -3.8f; // Dive downwards
+                    vy = IsSprinting ? -5.0f : -3.8f; // Dive downwards faster with sprint
                 }
 
                 FallDistance = 0f; // Liquid cushions and prevents all fall damage
@@ -711,6 +759,26 @@ namespace VoxelRenderEngine.src.Entities
                                 world.SetBlockWorld(down.X, down.Y, down.Z, BlockType.Empty);
                             }
                         }
+                        else if (def.Type == BlockType.IronDoorLower || def.Type == BlockType.IronDoorLowerOpen)
+                        {
+                            dropType = BlockType.IronDoorLower;
+                            var up = bp + Vector3i.UnitY;
+                            byte upId = world.GetBlockWorld(up.X, up.Y, up.Z);
+                            if (upId == (byte)BlockType.IronDoorUpper || upId == (byte)BlockType.IronDoorUpperOpen)
+                            {
+                                world.SetBlockWorld(up.X, up.Y, up.Z, BlockType.Empty);
+                            }
+                        }
+                        else if (def.Type == BlockType.IronDoorUpper || def.Type == BlockType.IronDoorUpperOpen)
+                        {
+                            dropType = BlockType.IronDoorLower;
+                            var down = bp - Vector3i.UnitY;
+                            byte downId = world.GetBlockWorld(down.X, down.Y, down.Z);
+                            if (downId == (byte)BlockType.IronDoorLower || downId == (byte)BlockType.IronDoorLowerOpen)
+                            {
+                                world.SetBlockWorld(down.X, down.Y, down.Z, BlockType.Empty);
+                            }
+                        }
                         else if (def.Type == BlockType.LeverOn)
                         {
                             dropType = BlockType.Lever;
@@ -725,8 +793,60 @@ namespace VoxelRenderEngine.src.Entities
                         {
                             dropType = BlockType.PoweredRail;
                         }
+                        else if (def.Type == BlockType.BedFoot || def.Type == BlockType.BedHead)
+                        {
+                            dropType = BlockType.BedFoot;
+                            // Clean up the other half of the bed
+                            Vector3i[] bedOffsets = { Vector3i.UnitX, -Vector3i.UnitX, Vector3i.UnitZ, -Vector3i.UnitZ };
+                            foreach (var off in bedOffsets)
+                            {
+                                var nPos = bp + off;
+                                byte nId = world.GetBlockWorld(nPos.X, nPos.Y, nPos.Z);
+                                if (nId == (byte)BlockType.BedFoot || nId == (byte)BlockType.BedHead)
+                                {
+                                    world.SetBlockWorld(nPos.X, nPos.Y, nPos.Z, BlockType.Empty);
+                                    break;
+                                }
+                            }
+                        }
 
-                        DroppedItems.Add(new ItemDrop(dropType, new Vector3(bp.X, bp.Y, bp.Z)));
+                        if (def.Type == BlockType.Leaves || def.Type == BlockType.SpruceLeaves)
+                        {
+                            // Leaves have a ~20% chance to drop Oak Sapling when broken
+                            if (Random.Shared.Next(100) < 20)
+                            {
+                                DroppedItems.Add(new ItemDrop(BlockType.OakSapling, new Vector3(bp.X, bp.Y, bp.Z)));
+                            }
+                        }
+                        else if (def.Type == BlockType.TallGrass)
+                        {
+                            // Tall grass has a ~60% chance to drop Wheat Seeds when broken
+                            if (Random.Shared.Next(100) < 60)
+                            {
+                                DroppedItems.Add(new ItemDrop(BlockType.WheatSeeds, new Vector3(bp.X, bp.Y, bp.Z)));
+                            }
+                        }
+                        else if (def.Type == BlockType.Wheat)
+                        {
+                            byte stage = world.GetBlockMetadata(bp.X, bp.Y, bp.Z);
+                            world.GrowingCrops.Remove(bp);
+                            if (stage >= 7)
+                            {
+                                // Fully grown wheat drops harvested Wheat item + 1-2 Wheat Seeds
+                                DroppedItems.Add(new ItemDrop(BlockType.Wheat, new Vector3(bp.X, bp.Y, bp.Z)));
+                                int seeds = 1 + Random.Shared.Next(2);
+                                DroppedItems.Add(new ItemDrop(BlockType.WheatSeeds, new Vector3(bp.X, bp.Y, bp.Z), seeds));
+                            }
+                            else
+                            {
+                                // Immature wheat only returns 1 seed
+                                DroppedItems.Add(new ItemDrop(BlockType.WheatSeeds, new Vector3(bp.X, bp.Y, bp.Z)));
+                            }
+                        }
+                        else
+                        {
+                            DroppedItems.Add(new ItemDrop(dropType, new Vector3(bp.X, bp.Y, bp.Z)));
+                        }
 
                         // If broken block was a chest, drop its contents
                         if (def.Type == BlockType.Chest && ChestManager != null)
@@ -857,6 +977,33 @@ namespace VoxelRenderEngine.src.Entities
                             rightClickWasDown = true;
                             return;
                         }
+                        else if (blockId == (byte)BlockType.Grass || blockId == (byte)BlockType.Dirt)
+                        {
+                            // Tilling: Shift-Right-Click grass or dirt block next to water turns it into Farmland
+                            bool hasWater = false;
+                            for (int dx = -2; dx <= 2 && !hasWater; dx++)
+                            {
+                                for (int dz = -2; dz <= 2 && !hasWater; dz++)
+                                {
+                                    for (int dy = -1; dy <= 1; dy++)
+                                    {
+                                        if (world.GetBlockWorld(bp.X + dx, bp.Y + dy, bp.Z + dz) == (byte)BlockType.Water)
+                                        {
+                                            hasWater = true;
+                                            break;
+                                        }
+                                    }
+                                }
+                            }
+
+                            if (hasWater)
+                            {
+                                world.SetBlockWorld(bp.X, bp.Y, bp.Z, BlockType.Farmland);
+                                AudioManager?.PlayCategorySound("gravel", volume: 0.8f, pitchVariance: 0.15f);
+                                rightClickWasDown = true;
+                                return;
+                            }
+                        }
                     }
 
                     // A. Chest interaction
@@ -906,6 +1053,15 @@ namespace VoxelRenderEngine.src.Entities
                         return;
                     }
 
+                    if (blockId == (byte)BlockType.IronDoorLower || blockId == (byte)BlockType.IronDoorUpper ||
+                        blockId == (byte)BlockType.IronDoorLowerOpen || blockId == (byte)BlockType.IronDoorUpperOpen)
+                    {
+                        RedstoneSystem.ToggleDoor(world, bp);
+                        AudioManager?.PlayBlockPlaceSound(BlockType.IronBlock);
+                        rightClickWasDown = true;
+                        return;
+                    }
+
                     // C. Lever interaction (flip on/off)
                     if (blockId == (byte)BlockType.Lever || blockId == (byte)BlockType.LeverOn)
                     {
@@ -923,6 +1079,34 @@ namespace VoxelRenderEngine.src.Entities
                         rightClickWasDown = true;
                         return;
                     }
+
+                    // E. Bed interaction (sleep / skip night)
+                    if (blockId == (byte)BlockType.BedFoot || blockId == (byte)BlockType.BedHead)
+                    {
+                        OnUseBed?.Invoke(bp);
+                        rightClickWasDown = true;
+                        return;
+                    }
+
+                    // F. Farmland interaction (plant WheatSeeds directly on farmland)
+                    if (blockId == (byte)BlockType.Farmland && !hotbarStack.IsEmpty && hotbarStack.Type == BlockType.WheatSeeds)
+                    {
+                        var plantPos = bp + Vector3i.UnitY;
+                        if (plantPos.Y < Chunk.SIZE_Y && world.GetBlockWorld(plantPos.X, plantPos.Y, plantPos.Z) == (byte)BlockType.Empty)
+                        {
+                            world.SetBlockWorld(plantPos.X, plantPos.Y, plantPos.Z, BlockType.Wheat);
+                            world.SetBlockMetadata(plantPos.X, plantPos.Y, plantPos.Z, 0); // Stage 0
+                            world.GrowingCrops.Add(plantPos);
+                            AudioManager?.PlayBlockPlaceSound(BlockType.Grass);
+                            Inventory.Slots[SelectedHotbarSlot].Count--;
+                            if (Inventory.Slots[SelectedHotbarSlot].Count <= 0)
+                            {
+                                Inventory.Slots[SelectedHotbarSlot].Clear();
+                            }
+                            rightClickWasDown = true;
+                            return;
+                        }
+                    }
                 }
 
                 // Normal block placement from hotbar
@@ -935,8 +1119,8 @@ namespace VoxelRenderEngine.src.Entities
                     {
                         var placeDef = BlockRegistry.Get(hotbarStack.Type);
 
-                        // Special multi-block placement: Wooden Door (2 blocks tall)
-                        if (hotbarStack.Type == BlockType.DoorLower)
+                        // Special multi-block placement: Wooden or Iron Door (2 blocks tall)
+                        if (hotbarStack.Type == BlockType.DoorLower || hotbarStack.Type == BlockType.IronDoorLower)
                         {
                             if (pb.Y + 1 < Chunk.SIZE_Y && world.GetBlockWorld(pb.X, pb.Y + 1, pb.Z) == (byte)BlockType.Empty)
                             {
@@ -946,8 +1130,51 @@ namespace VoxelRenderEngine.src.Entities
 
                                 if (!pBox.Intersects(lowerBox) && !pBox.Intersects(upperBox))
                                 {
-                                    world.SetBlockWorld(pb.X, pb.Y, pb.Z, BlockType.DoorLower);
-                                    world.SetBlockWorld(pb.X, pb.Y + 1, pb.Z, BlockType.DoorUpper);
+                                    bool isIron = hotbarStack.Type == BlockType.IronDoorLower;
+                                    world.SetBlockWorld(pb.X, pb.Y, pb.Z, isIron ? BlockType.IronDoorLower : BlockType.DoorLower);
+                                    world.SetBlockWorld(pb.X, pb.Y + 1, pb.Z, isIron ? BlockType.IronDoorUpper : BlockType.DoorUpper);
+                                    BlocksPlaced += 2;
+                                    AudioManager?.PlayBlockPlaceSound(isIron ? BlockType.IronBlock : BlockType.Planks);
+                                    Inventory.Slots[SelectedHotbarSlot].Count--;
+                                    if (Inventory.Slots[SelectedHotbarSlot].Count <= 0)
+                                    {
+                                        Inventory.Slots[SelectedHotbarSlot].Clear();
+                                    }
+                                }
+                            }
+                        }
+                        // Special multi-block placement: Bed (2 blocks long)
+                        else if (hotbarStack.Type == BlockType.BedFoot)
+                        {
+                            Vector3i forwardOffset;
+                            byte facing; // 0 = South (+Z), 1 = North (-Z), 2 = West (-X), 3 = East (+X)
+
+                            if (MathF.Abs(Camera.Forward.Z) > MathF.Abs(Camera.Forward.X))
+                            {
+                                forwardOffset = Camera.Forward.Z > 0 ? Vector3i.UnitZ : -Vector3i.UnitZ;
+                                facing = Camera.Forward.Z > 0 ? (byte)0 : (byte)1;
+                            }
+                            else
+                            {
+                                forwardOffset = Camera.Forward.X > 0 ? Vector3i.UnitX : -Vector3i.UnitX;
+                                facing = Camera.Forward.X > 0 ? (byte)3 : (byte)2;
+                            }
+
+                            Vector3i headPos = pb + forwardOffset;
+                            if (world.GetBlockWorld(headPos.X, headPos.Y, headPos.Z) == (byte)BlockType.Empty)
+                            {
+                                AABB footBox = new AABB(pb.X - 0.5f, pb.Y - 0.5f, pb.Z - 0.5f, pb.X + 0.5f, pb.Y + 0.1f, pb.Z + 0.5f);
+                                AABB headBox = new AABB(headPos.X - 0.5f, headPos.Y - 0.5f, headPos.Z - 0.5f, headPos.X + 0.5f, headPos.Y + 0.1f, headPos.Z + 0.5f);
+                                AABB pBox = GetAABB();
+
+                                if (!pBox.Intersects(footBox) && !pBox.Intersects(headBox))
+                                {
+                                    world.SetBlockWorld(pb.X, pb.Y, pb.Z, BlockType.BedFoot);
+                                    world.SetBlockMetadata(pb.X, pb.Y, pb.Z, facing);
+
+                                    world.SetBlockWorld(headPos.X, headPos.Y, headPos.Z, BlockType.BedHead);
+                                    world.SetBlockMetadata(headPos.X, headPos.Y, headPos.Z, facing);
+
                                     BlocksPlaced += 2;
                                     AudioManager?.PlayBlockPlaceSound(BlockType.Planks);
                                     Inventory.Slots[SelectedHotbarSlot].Count--;
@@ -979,6 +1206,25 @@ namespace VoxelRenderEngine.src.Entities
                                 if (toPlace == BlockType.PoweredRail && RedstoneSystem.HasActivePowerNeighbor(world, pb))
                                 {
                                     toPlace = BlockType.PoweredRailOn;
+                                }
+
+                                if (toPlace == BlockType.WheatSeeds)
+                                {
+                                    byte under = world.GetBlockWorld(pb.X, pb.Y - 1, pb.Z);
+                                    if (under != (byte)BlockType.Farmland)
+                                    {
+                                        canPlace = false;
+                                    }
+                                    else
+                                    {
+                                        toPlace = BlockType.Wheat;
+                                        world.GrowingCrops.Add(pb);
+                                    }
+                                }
+
+                                if (!canPlace)
+                                {
+                                    return;
                                 }
 
                                 byte metadata = 0;
@@ -1245,6 +1491,8 @@ namespace VoxelRenderEngine.src.Entities
         {
             Health = MaxHealth;
             Oxygen = MaxOxygen;
+            Stamina = MaxStamina;
+            IsSprinting = false;
             Velocity = Vector3.Zero;
             IsFlying = false;
             FallDistance = 0f;

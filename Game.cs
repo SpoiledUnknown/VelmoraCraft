@@ -55,9 +55,23 @@ namespace VoxelRenderEngine
         private float currentWaterTint = 0f;
         private float currentLavaTint = 0f;
 
+        // Screenshot capture state (F2 - Minecraft standard)
+        private bool takeScreenshotRequested = false;
+        private bool f2KeyWasDown = false;
+
+        /// <summary>
+        /// Controls the strength of the foliage wind sway shader animation (leaves, grass, sugarcane, saplings, flowers, wheat).
+        /// Easily tweakable variable to adjust the wind swaying intensity.
+        /// </summary>
+        public float WindStrength { get; set; } = 0.08f;
+
+        private float runningTime = 0f;
+
         // Cached Shader Uniform Locations to eliminate per-frame driver string queries
         private int uModel = -1;
         private int uViewProj = -1;
+        private int uTime = -1;
+        private int uWindStrength = -1;
         private int uViewPos = -1;
         private int uFogColor = -1;
         private int uFogStart = -1;
@@ -134,6 +148,18 @@ namespace VoxelRenderEngine
             uiManager.OnQuitRequested = () => Close();
             uiManager.OnReturnToMainMenuRequested = () => ReturnToMainMenu();
             uiManager.OnSaveGameRequested = () => SaveCurrentWorld();
+            uiManager.IsFullscreenGetter = () => WindowState == WindowState.Fullscreen;
+            uiManager.OnToggleFullscreenRequested = () =>
+            {
+                if (WindowState == WindowState.Fullscreen)
+                {
+                    WindowState = WindowState.Normal;
+                }
+                else
+                {
+                    WindowState = WindowState.Fullscreen;
+                }
+            };
 
             // Initialize Victory Screen
             victoryScreen = new VictoryScreen(uiRenderer);
@@ -187,24 +213,7 @@ namespace VoxelRenderEngine
             Vector3 spawnPos = new Vector3(initCenter + 0.5f, spawnY + 2.5f, initCenter + 0.5f);
             camera = new Camera(width, height, spawnPos);
             player = new Player(spawnPos, camera);
-            player.ChestManager = chestManager;
-            player.AudioManager = audioManager;
-            player.OnOpenChest = (pos, chestInv) =>
-            {
-                uiManager.OpenChest(pos, chestInv);
-                CursorState = CursorState.Normal;
-            };
-            player.OnOpenCraftingTable = () =>
-            {
-                uiManager.OpenCraftingTable();
-                CursorState = CursorState.Normal;
-            };
-            player.OnOpenFurnace = (pos) =>
-            {
-                uiManager.OpenFurnace(pos);
-                CursorState = CursorState.Normal;
-            };
-            player.OnPortalEntered = () => TriggerVictoryScreen();
+            SetupPlayerCallbacks(player);
             uiManager.SetPlayer(player);
             uiManager.SetWorld(world);
 
@@ -233,24 +242,7 @@ namespace VoxelRenderEngine
 
             camera = new Camera(width, height, spawnPos);
             player = new Player(spawnPos, camera);
-            player.ChestManager = chestManager;
-            player.AudioManager = audioManager;
-            player.OnOpenChest = (pos, chestInv) =>
-            {
-                uiManager?.OpenChest(pos, chestInv);
-                CursorState = CursorState.Normal;
-            };
-            player.OnOpenCraftingTable = () =>
-            {
-                uiManager?.OpenCraftingTable();
-                CursorState = CursorState.Normal;
-            };
-            player.OnOpenFurnace = (pos) =>
-            {
-                uiManager?.OpenFurnace(pos);
-                CursorState = CursorState.Normal;
-            };
-            player.OnPortalEntered = () => TriggerVictoryScreen();
+            SetupPlayerCallbacks(player);
 
             // Clean starter inventory for completed game progression
             player.Inventory.Clear();
@@ -304,24 +296,7 @@ namespace VoxelRenderEngine
             camera.UpdateVectors();
 
             player = new Player(safePos, camera);
-            player.ChestManager = chestManager;
-            player.AudioManager = audioManager;
-            player.OnOpenChest = (pos, chestInv) =>
-            {
-                uiManager?.OpenChest(pos, chestInv);
-                CursorState = CursorState.Normal;
-            };
-            player.OnOpenCraftingTable = () =>
-            {
-                uiManager?.OpenCraftingTable();
-                CursorState = CursorState.Normal;
-            };
-            player.OnOpenFurnace = (pos) =>
-            {
-                uiManager?.OpenFurnace(pos);
-                CursorState = CursorState.Normal;
-            };
-            player.OnPortalEntered = () => TriggerVictoryScreen();
+            SetupPlayerCallbacks(player);
 
             SaveSystem.ApplyLoadedData(data, world, player, dayNightCycle!, chestManager);
             totalPlayTime = data.PlayTimeSeconds;
@@ -331,6 +306,42 @@ namespace VoxelRenderEngine
             currentScene = SceneState.InGame;
             if (mainMenu != null) mainMenu.HasActiveWorld = true;
             CursorState = CursorState.Grabbed;
+        }
+
+        private void SetupPlayerCallbacks(Player p)
+        {
+            p.ChestManager = chestManager;
+            p.AudioManager = audioManager;
+            p.OnOpenChest = (pos, chestInv) =>
+            {
+                uiManager?.OpenChest(pos, chestInv);
+                CursorState = CursorState.Normal;
+            };
+            p.OnOpenCraftingTable = () =>
+            {
+                uiManager?.OpenCraftingTable();
+                CursorState = CursorState.Normal;
+            };
+            p.OnOpenFurnace = (pos) =>
+            {
+                uiManager?.OpenFurnace(pos);
+                CursorState = CursorState.Normal;
+            };
+            p.OnPortalEntered = () => TriggerVictoryScreen();
+            p.OnUseBed = (bedPos) =>
+            {
+                var phase = dayNightCycle?.CurrentPhase ?? DayNightPhase.Day;
+                if (phase == DayNightPhase.Night || phase == DayNightPhase.Dusk)
+                {
+                    uiManager?.StartSleeping();
+                    p.SpawnPosition = new Vector3(bedPos.X + 0.5f, bedPos.Y + 0.6f, bedPos.Z + 0.5f);
+                    audioManager?.PlayCategorySound("wood", volume: 0.6f);
+                }
+                else
+                {
+                    uiManager?.ShowToast("You can only sleep at night!");
+                }
+            };
         }
 
         private void TriggerVictoryScreen()
@@ -449,6 +460,8 @@ namespace VoxelRenderEngine
 
             GL.UniformMatrix4f(uModel, 1, true, ref model);
             GL.UniformMatrix4f(uViewProj, 1, true, ref viewProj);
+            GL.Uniform1f(uTime, runningTime);
+            GL.Uniform1f(uWindStrength, WindStrength);
 
             // Fog & camera uniforms
             Vector3 camPos = activeCam.Position;
@@ -553,6 +566,22 @@ namespace VoxelRenderEngine
                 uiManager?.Render(width, height, MouseState.Position);
             }
 
+            // Capture screenshot if requested (F2 - Minecraft standard) before buffer swap
+            if (takeScreenshotRequested)
+            {
+                try
+                {
+                    string savedPath = ScreenshotHelper.CaptureAndSave(width, height);
+                    string filename = Path.GetFileName(savedPath);
+                    uiManager?.ShowScreenshotNotification(filename);
+                }
+                catch (Exception ex)
+                {
+                    Console.WriteLine($"[Screenshot] Error capturing screenshot: {ex.Message}");
+                }
+                takeScreenshotRequested = false;
+            }
+
             Context.SwapBuffers();
 
             base.OnRenderFrame(args);
@@ -586,12 +615,21 @@ namespace VoxelRenderEngine
             MouseState mouse = MouseState;
             KeyboardState keyboard = KeyboardState;
             float dt = (float)args.Time;
+            runningTime += dt;
 
             // Dynamic audio update for ambient & day/night music transitions
             audioManager?.Update(dayNightCycle?.CurrentPhase ?? DayNightPhase.Day, dt);
 
             // Dynamic sky & drifting clouds simulation
             skyRenderer?.Update(dt);
+
+            // Global screenshot key (F2 - Minecraft standard)
+            bool f2Down = keyboard.IsKeyDown(Keys.F2);
+            if (f2Down && !f2KeyWasDown)
+            {
+                takeScreenshotRequested = true;
+            }
+            f2KeyWasDown = f2Down;
 
             if (currentScene == SceneState.MainMenu)
             {
@@ -671,6 +709,8 @@ namespace VoxelRenderEngine
             int pid = shaderProgram.ID;
             uModel = GL.GetUniformLocation(pid, "model");
             uViewProj = GL.GetUniformLocation(pid, "viewProj");
+            uTime = GL.GetUniformLocation(pid, "uTime");
+            uWindStrength = GL.GetUniformLocation(pid, "uWindStrength");
             uViewPos = GL.GetUniformLocation(pid, "viewPos");
             uFogColor = GL.GetUniformLocation(pid, "fogColor");
             uFogStart = GL.GetUniformLocation(pid, "fogStart");

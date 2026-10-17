@@ -70,6 +70,8 @@ namespace VoxelRenderEngine.src.UI
             Recipes.Add(new CraftingRecipe("Ladder (x3)", new ItemStack(BlockType.Ladder, 3), new[] { (BlockType.Planks, 3) }, RecipeStation.CraftingTable));
             Recipes.Add(new CraftingRecipe("Trapdoor (x2)", new ItemStack(BlockType.Trapdoor, 2), new[] { (BlockType.Planks, 6) }, RecipeStation.CraftingTable));
             Recipes.Add(new CraftingRecipe("Wooden Door", new ItemStack(BlockType.DoorLower, 1), new[] { (BlockType.Planks, 6) }, RecipeStation.CraftingTable));
+            Recipes.Add(new CraftingRecipe("Iron Door", new ItemStack(BlockType.IronDoorLower, 1), new[] { (BlockType.IronIngot, 6) }, RecipeStation.CraftingTable));
+            Recipes.Add(new CraftingRecipe("Bed", new ItemStack(BlockType.BedFoot, 1), new[] { (BlockType.WhiteWool, 3), (BlockType.Planks, 3) }, RecipeStation.CraftingTable));
             Recipes.Add(new CraftingRecipe("Bookshelf", new ItemStack(BlockType.Bookshelf, 1), new[] { (BlockType.Planks, 6), (BlockType.SugarCane, 3) }, RecipeStation.CraftingTable));
 
             // ==========================================
@@ -118,6 +120,7 @@ namespace VoxelRenderEngine.src.UI
             Recipes.Add(new CraftingRecipe("Jack-o'-Lantern", new ItemStack(BlockType.JackOLantern, 1), new[] { (BlockType.Pumpkin, 1), (BlockType.Torch, 1) }, RecipeStation.CraftingTable));
             Recipes.Add(new CraftingRecipe("Flint & Steel", new ItemStack(BlockType.FlintAndSteel, 1), new[] { (BlockType.IronIngot, 1), (BlockType.Cobblestone, 1) }, RecipeStation.CraftingTable));
             Recipes.Add(new CraftingRecipe("Cake", new ItemStack(BlockType.Cake, 1), new[] { (BlockType.Wheat, 3), (BlockType.SugarCane, 2) }, RecipeStation.CraftingTable));
+            Recipes.Add(new CraftingRecipe("Bread", new ItemStack(BlockType.Cake, 1), new[] { (BlockType.Wheat, 3) }, RecipeStation.Personal));
 
             // ==========================================
             // 6. Wool Production & 16 Dyeing Recipes

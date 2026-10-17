@@ -214,7 +214,8 @@ namespace VoxelRenderEngine.src.Audio
             {
                 BlockType.Grass or BlockType.Leaves or BlockType.SpruceLeaves or BlockType.Rose or
                 BlockType.Dandelion or BlockType.OakSapling or BlockType.Wheat or BlockType.SugarCane or
-                BlockType.Cactus or BlockType.RedMushroom or BlockType.BrownMushroom => "grass",
+                BlockType.Cactus or BlockType.RedMushroom or BlockType.BrownMushroom or
+                BlockType.TallGrass or BlockType.WheatSeeds => "grass",
 
                 BlockType.Dirt or BlockType.Sand or BlockType.Gravel or BlockType.Clay or
                 BlockType.SoulSand or BlockType.Farmland or BlockType.SnowBlock or BlockType.SnowyGrass or
@@ -235,14 +236,15 @@ namespace VoxelRenderEngine.src.Audio
                 BlockType.Chest or BlockType.CraftingTable or BlockType.Bookshelf or BlockType.Jukebox or
                 BlockType.Pumpkin or BlockType.CarvedPumpkin or BlockType.JackOLantern or BlockType.TNT or
                 BlockType.Trapdoor or BlockType.Ladder or BlockType.Cake or BlockType.Sponge or
-                BlockType.Glass or BlockType.Ice => "wood",
+                BlockType.Glass or BlockType.Ice or BlockType.BedFoot or BlockType.BedHead => "wood",
 
                 BlockType.Water or BlockType.Portal => "water",
                 BlockType.Lava => "water",
 
                 BlockType.Rail or BlockType.PoweredRail or BlockType.PoweredRailOn or BlockType.IronIngot or
                 BlockType.IronBlock or BlockType.GoldBlock or BlockType.DiamondBlock or BlockType.LapisBlock or
-                BlockType.RedstoneBlock or BlockType.CoalBlock => "metal",
+                BlockType.RedstoneBlock or BlockType.CoalBlock or
+                BlockType.IronDoorLower or BlockType.IronDoorUpper or BlockType.IronDoorLowerOpen or BlockType.IronDoorUpperOpen => "metal",
 
                 _ => "gravel"
             };

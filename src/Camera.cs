@@ -4,10 +4,23 @@ namespace VoxelRenderEngine.src
 {
     public class Camera
     {
-        private float fov = 60.0f;
+        private float baseFov = 70.0f;
+        private float currentFov = 70.0f;
         private float aspectRatio;
         private float nearPlane = 0.1f;
         private float farPlane = 300.0f;
+
+        public float BaseFov
+        {
+            get => baseFov;
+            set => baseFov = Math.Clamp(value, 30.0f, 110.0f);
+        }
+
+        public float CurrentFov
+        {
+            get => currentFov;
+            set => currentFov = Math.Clamp(value, 30.0f, 130.0f);
+        }
 
         public Vector3 Position { get; set; }
         public float Pitch { get; set; } = 0.0f;
@@ -37,7 +50,7 @@ namespace VoxelRenderEngine.src
         public Matrix4 GetProjectionMatrix()
         {
             return Matrix4.CreatePerspectiveFieldOfView(
-                MathHelper.DegreesToRadians(fov),
+                MathHelper.DegreesToRadians(currentFov),
                 aspectRatio,
                 nearPlane,
                 farPlane

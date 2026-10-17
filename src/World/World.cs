@@ -62,6 +62,10 @@ namespace VoxelRenderEngine.src.World
         private float streamTimer = 0f;
         private Vector2i lastStreamedChunk = new Vector2i(-9999, -9999);
 
+        // Farming and crop simulation
+        public readonly HashSet<Vector3i> GrowingCrops = new HashSet<Vector3i>();
+        private float cropGrowthTimer = 0f;
+
         public World(int seed = 1337, int worldChunks = 64, Vector2i? initialSpawnChunk = null)
         {
             Seed = seed;
@@ -478,6 +482,36 @@ namespace VoxelRenderEngine.src.World
             if (deltaTime > 0f)
             {
                 FluidSystem.Update(this, deltaTime);
+
+                // 4b. Crop growth simulation (wheat grows through 8 stages)
+                cropGrowthTimer += deltaTime;
+                if (cropGrowthTimer >= 3.5f)
+                {
+                    cropGrowthTimer = 0f;
+                    if (GrowingCrops.Count > 0)
+                    {
+                        var crops = new List<Vector3i>(GrowingCrops);
+                        foreach (var cPos in crops)
+                        {
+                            byte b = GetBlockWorld(cPos.X, cPos.Y, cPos.Z);
+                            if (b == (byte)BlockType.Wheat)
+                            {
+                                byte stage = GetBlockMetadata(cPos.X, cPos.Y, cPos.Z);
+                                if (stage < 7)
+                                {
+                                    if (Random.Shared.Next(100) < 55)
+                                    {
+                                        SetBlockMetadata(cPos.X, cPos.Y, cPos.Z, (byte)(stage + 1));
+                                    }
+                                }
+                            }
+                            else
+                            {
+                                GrowingCrops.Remove(cPos);
+                            }
+                        }
+                    }
+                }
             }
 
             // 5. Memory trim once the initial world generation burst settles

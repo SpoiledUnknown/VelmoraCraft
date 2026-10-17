@@ -33,10 +33,42 @@ namespace VoxelRenderEngine.src.UI
         public Action? OnQuitRequested { get; set; }
         public Action? OnReturnToMainMenuRequested { get; set; }
         public Action? OnSaveGameRequested { get; set; }
+        public Func<bool>? IsFullscreenGetter { get; set; }
+        public Action? OnToggleFullscreenRequested { get; set; }
+        public bool IsFullscreen => IsFullscreenGetter?.Invoke() ?? false;
+        public bool IsHudEnabled { get; set; } = true;
         public DayNightCycle? DayNightCycle { get; set; }
         private float saveNotificationTimer = 0f;
 
         public void ShowSaveNotification() => saveNotificationTimer = 2.5f;
+
+        // Toast notification (screenshot, bed, info)
+        private long screenshotNotificationStartTime = 0;
+        private string screenshotNotificationMessage = "";
+
+        public void ShowToast(string message)
+        {
+            screenshotNotificationMessage = message;
+            screenshotNotificationStartTime = System.Diagnostics.Stopwatch.GetTimestamp();
+        }
+
+        public void ShowScreenshotNotification(string filename)
+        {
+            ShowToast($"Saved screenshot as {filename}");
+        }
+
+        // Sleep screen transition
+        private long sleepStartTime = 0;
+        private const double SLEEP_TOTAL_SECONDS = 1.8;
+        private bool hasSkippedNightThisSleep = false;
+
+        public void StartSleeping()
+        {
+            sleepStartTime = System.Diagnostics.Stopwatch.GetTimestamp();
+            hasSkippedNightThisSleep = false;
+        }
+
+        public bool IsSleeping => sleepStartTime != 0;
 
         // Player, world, chest & station references
         private Player? player;
@@ -45,10 +77,23 @@ namespace VoxelRenderEngine.src.UI
         private Vector3i? currentChestPos;
         private Vector3i? currentFurnacePos;
 
-        // Render Distance Slider settings
+        // Render Distance & FOV Slider settings
         private int renderDistanceChunks = 8;
         private bool isDraggingRenderDistanceSlider = false;
         public int RenderDistanceChunks => renderDistanceChunks;
+
+        private bool isDraggingFovSlider = false;
+        public float FieldOfView
+        {
+            get => player?.Camera?.BaseFov ?? 70f;
+            set
+            {
+                if (player?.Camera != null)
+                {
+                    player.Camera.BaseFov = Math.Clamp(value, 30f, 110f);
+                }
+            }
+        }
 
         // Held item for drag & drop
         public ItemStack HeldItem = ItemStack.Empty;
@@ -69,6 +114,8 @@ namespace VoxelRenderEngine.src.UI
         // Key states for debouncing
         private bool eKeyWasDown = false;
         private bool escKeyWasDown = false;
+        private bool f1KeyWasDown = false;
+        private bool f11KeyWasDown = false;
         private bool leftMouseWasDown = false;
         private bool rightMouseWasDown = false;
 
@@ -186,6 +233,22 @@ namespace VoxelRenderEngine.src.UI
             }
             escKeyWasDown = escDown;
 
+            // Toggle HUD with F1
+            bool f1Down = keyboard.IsKeyDown(Keys.F1);
+            if (f1Down && !f1KeyWasDown)
+            {
+                IsHudEnabled = !IsHudEnabled;
+            }
+            f1KeyWasDown = f1Down;
+
+            // Toggle Fullscreen with F11
+            bool f11Down = keyboard.IsKeyDown(Keys.F11);
+            if (f11Down && !f11KeyWasDown)
+            {
+                OnToggleFullscreenRequested?.Invoke();
+            }
+            f11KeyWasDown = f11Down;
+
             // Handle UI Clicks when screen is open
             if (CurrentState != UIState.HUD)
             {
@@ -245,17 +308,17 @@ namespace VoxelRenderEngine.src.UI
         private void HandlePauseMenuClicks(float mx, float my, int screenW, int screenH, bool leftClicked, bool leftDown)
         {
             float panelWidth = 320f;
-            float panelHeight = 350f;
+            float panelHeight = 390f;
             float startX = (screenW - panelWidth) * 0.5f;
             float startY = (screenH - panelHeight) * 0.5f;
 
-            float btnW = 240f;
-            float btnH = 34f;
-            float btnSpacing = 8f;
+            float btnW = 250f;
+            float btnH = 32f;
+            float btnSpacing = 6f;
             float btnX = startX + (panelWidth - btnW) * 0.5f;
 
             // 1. Resume Game
-            float btn1Y = startY + 54f;
+            float btn1Y = startY + 48f;
             if (leftClicked && mx >= btnX && mx <= btnX + btnW && my >= btn1Y && my <= btn1Y + btnH)
             {
                 CloseUI();
@@ -293,14 +356,33 @@ namespace VoxelRenderEngine.src.UI
                 return;
             }
 
-            // 5. Render Distance Slider (2 to 16 chunks)
-            float sliderY = btn4Y + btnH + btnSpacing + 2f;
-            float trackX = btnX;
-            float trackY = sliderY + 18f;
-            float trackW = btnW;
-            float trackH = 10f;
+            // 5. Side-by-side toggles: Fullscreen and HUD
+            float btn5Y = btn4Y + btnH + btnSpacing;
+            float toggleGap = 8f;
+            float toggleW = (btnW - toggleGap) * 0.5f;
+            float toggle1X = btnX;
+            float toggle2X = btnX + toggleW + toggleGap;
 
-            if (leftClicked && mx >= trackX - 8f && mx <= trackX + trackW + 8f && my >= sliderY && my <= trackY + trackH + 10f)
+            if (leftClicked && mx >= toggle1X && mx <= toggle1X + toggleW && my >= btn5Y && my <= btn5Y + btnH)
+            {
+                OnToggleFullscreenRequested?.Invoke();
+                return;
+            }
+
+            if (leftClicked && mx >= toggle2X && mx <= toggle2X + toggleW && my >= btn5Y && my <= btn5Y + btnH)
+            {
+                IsHudEnabled = !IsHudEnabled;
+                return;
+            }
+
+            // 6. Render Distance Slider (2 to 16 chunks)
+            float slider1Y = btn5Y + btnH + btnSpacing + 2f;
+            float track1X = btnX;
+            float track1Y = slider1Y + 16f;
+            float track1W = btnW;
+            float track1H = 9f;
+
+            if (leftClicked && mx >= track1X - 8f && mx <= track1X + track1W + 8f && my >= slider1Y && my <= track1Y + track1H + 6f)
             {
                 isDraggingRenderDistanceSlider = true;
             }
@@ -312,13 +394,37 @@ namespace VoxelRenderEngine.src.UI
 
             if (isDraggingRenderDistanceSlider && leftDown)
             {
-                float pct = Math.Clamp((mx - trackX) / trackW, 0f, 1f);
+                float pct = Math.Clamp((mx - track1X) / track1W, 0f, 1f);
                 int chunks = 2 + (int)MathF.Round(pct * 14f);
                 SetRenderDistance(chunks);
             }
 
-            // 7. Quit to Desktop
-            float btn6Y = sliderY + 42f;
+            // 7. FOV Slider (30 to 110 degrees)
+            float slider2Y = track1Y + track1H + 8f;
+            float track2X = btnX;
+            float track2Y = slider2Y + 16f;
+            float track2W = btnW;
+            float track2H = 9f;
+
+            if (leftClicked && mx >= track2X - 8f && mx <= track2X + track2W + 8f && my >= slider2Y && my <= track2Y + track2H + 6f)
+            {
+                isDraggingFovSlider = true;
+            }
+
+            if (!leftDown)
+            {
+                isDraggingFovSlider = false;
+            }
+
+            if (isDraggingFovSlider && leftDown)
+            {
+                float pct = Math.Clamp((mx - track2X) / track2W, 0f, 1f);
+                int newFov = 30 + (int)MathF.Round(pct * 80f);
+                FieldOfView = newFov;
+            }
+
+            // 8. Quit to Desktop
+            float btn6Y = track2Y + track2H + 12f;
             if (leftClicked && mx >= btnX && mx <= btnX + btnW && my >= btn6Y && my <= btn6Y + btnH)
             {
                 OnSaveGameRequested?.Invoke();
@@ -733,7 +839,11 @@ namespace VoxelRenderEngine.src.UI
             switch (CurrentState)
             {
                 case UIState.HUD:
-                    RenderHUD(screenWidth, screenHeight);
+                    UpdateFpsCounter();
+                    if (IsHudEnabled)
+                    {
+                        RenderHUD(screenWidth, screenHeight);
+                    }
                     break;
 
                 case UIState.PersonalInventory:
@@ -768,6 +878,12 @@ namespace VoxelRenderEngine.src.UI
             {
                 renderer.DrawTooltip(hoveredTooltip, mousePosition.X, mousePosition.Y, screenWidth, screenHeight);
             }
+
+            // Render Sleeping / Night-skip screen if active
+            RenderSleepingScreen(screenWidth, screenHeight);
+
+            // Render Screenshot Toast notification if active
+            RenderScreenshotToast(screenWidth, screenHeight);
 
             renderer.End();
         }
@@ -878,15 +994,32 @@ namespace VoxelRenderEngine.src.UI
             string hpText = $"HP {(int)MathF.Ceiling(player.Health)}/{(int)player.MaxHealth}";
             renderer.DrawText(hpText, hx + 6f, sliderY + 2f, 0.85f, new Vector4(1f, 0.95f, 0.95f, 1f), shadow: true);
 
-            // --- Oxygen Slider (Right) ---
-            float oxX = hx + sliderW + sliderGap;
-            float oxPct = Math.Clamp(player.Oxygen / player.MaxOxygen, 0f, 1f);
-            Vector4 oxBg = new Vector4(0.04f, 0.12f, 0.22f, 0.85f);
-            Vector4 oxFill = new Vector4(0.15f, 0.65f, 0.95f, 0.95f); // Deep Cyan/Ocean Blue
-            renderer.DrawProgressBar(oxX, sliderY, sliderW, sliderH, oxPct, oxFill, oxBg);
+            // --- Second Slider: Oxygen (Underwater) OR Sprint/Stamina (On Land) ---
+            float secondBarX = hx + sliderW + sliderGap;
+            if (player.IsUnderwater)
+            {
+                // Underwater: Oxygen Bar
+                float oxPct = Math.Clamp(player.Oxygen / player.MaxOxygen, 0f, 1f);
+                Vector4 oxBg = new Vector4(0.04f, 0.12f, 0.22f, 0.85f);
+                Vector4 oxFill = new Vector4(0.15f, 0.65f, 0.95f, 0.95f); // Deep Cyan/Ocean Blue
+                renderer.DrawProgressBar(secondBarX, sliderY, sliderW, sliderH, oxPct, oxFill, oxBg);
 
-            string oxText = $"O2 {(int)MathF.Ceiling(player.Oxygen)}%";
-            renderer.DrawText(oxText, oxX + 6f, sliderY + 2f, 0.85f, new Vector4(0.9f, 0.98f, 1f, 1f), shadow: true);
+                string oxText = $"O2 {(int)MathF.Ceiling(player.Oxygen)}%";
+                renderer.DrawText(oxText, secondBarX + 6f, sliderY + 2f, 0.85f, new Vector4(0.9f, 0.98f, 1f, 1f), shadow: true);
+            }
+            else
+            {
+                // On Land: Sprint / Stamina Bar (lasts 30s, recharges in 8s)
+                float stPct = Math.Clamp(player.Stamina / player.MaxStamina, 0f, 1f);
+                Vector4 stBg = new Vector4(0.15f, 0.12f, 0.05f, 0.85f);
+                Vector4 stFill = (stPct > 0.20f)
+                    ? new Vector4(0.95f, 0.72f, 0.15f, 0.95f) // Vibrant Golden Amber
+                    : new Vector4(0.98f, 0.35f, 0.10f, 0.98f); // Warning orange-red
+                renderer.DrawProgressBar(secondBarX, sliderY, sliderW, sliderH, stPct, stFill, stBg);
+
+                string stText = $"SPRINT {(int)MathF.Ceiling(player.Stamina)}%";
+                renderer.DrawText(stText, secondBarX + 6f, sliderY + 2f, 0.85f, new Vector4(1f, 0.96f, 0.88f, 1f), shadow: true);
+            }
 
             // Display currently selected item name above status sliders
             var selStack = player.Inventory.Slots[player.SelectedHotbarSlot];
@@ -1217,7 +1350,7 @@ namespace VoxelRenderEngine.src.UI
             renderer.DrawQuad(0, 0, screenW, screenH, new Vector4(0.02f, 0.02f, 0.04f, 0.70f));
 
             float panelWidth = 320f;
-            float panelHeight = 350f;
+            float panelHeight = 390f;
             float startX = (screenW - panelWidth) * 0.5f;
             float startY = (screenH - panelHeight) * 0.5f;
 
@@ -1242,16 +1375,16 @@ namespace VoxelRenderEngine.src.UI
             else
             {
                 // Divider line
-                renderer.DrawQuad(startX + 20f, startY + 42f, panelWidth - 40f, 1.5f, new Vector4(0.30f, 0.35f, 0.45f, 0.6f));
+                renderer.DrawQuad(startX + 20f, startY + 40f, panelWidth - 40f, 1.5f, new Vector4(0.30f, 0.35f, 0.45f, 0.6f));
             }
 
-            float btnW = 240f;
-            float btnH = 34f;
-            float btnSpacing = 8f;
+            float btnW = 250f;
+            float btnH = 32f;
+            float btnSpacing = 6f;
             float btnX = startX + (panelWidth - btnW) * 0.5f;
 
             // Button 1: Resume Game
-            float btn1Y = startY + 54f;
+            float btn1Y = startY + 48f;
             RenderMenuButton("RESUME GAME", btnX, btn1Y, btnW, btnH, mousePos);
 
             // Button 2: Save Game
@@ -1267,46 +1400,93 @@ namespace VoxelRenderEngine.src.UI
             string flyText = (player?.IsFlying ?? false) ? "FLIGHT: ENABLED" : "FLIGHT: DISABLED";
             RenderMenuButton(flyText, btnX, btn4Y, btnW, btnH, mousePos);
 
-            // Section 5: Render Distance Slider (2 to 16 chunks)
-            float sliderY = btn4Y + btnH + btnSpacing + 2f;
+            // Row 5: 2 Toggles side by side (Fullscreen & HUD)
+            float btn5Y = btn4Y + btnH + btnSpacing;
+            float toggleGap = 8f;
+            float toggleW = (btnW - toggleGap) * 0.5f;
+            float toggle1X = btnX;
+            float toggle2X = btnX + toggleW + toggleGap;
+
+            string fsText = IsFullscreen ? "FULLSCREEN: ON" : "FULLSCREEN: OFF";
+            string hudText = IsHudEnabled ? "HUD: ON" : "HUD: OFF";
+
+            RenderMenuButton(fsText, toggle1X, btn5Y, toggleW, btnH, mousePos, scale: 0.82f);
+            RenderMenuButton(hudText, toggle2X, btn5Y, toggleW, btnH, mousePos, scale: 0.82f);
+
+            // Section 6: Render Distance Slider (2 to 16 chunks)
+            float slider1Y = btn5Y + btnH + btnSpacing + 2f;
             int curDist = world?.ViewDistanceChunks ?? renderDistanceChunks;
             string distText = $"RENDER DISTANCE: {curDist} CHUNKS";
             Vector2 distSz = renderer.MeasureText(distText, 0.90f);
-            renderer.DrawText(distText, btnX + (btnW - distSz.X) * 0.5f, sliderY, 0.90f, new Vector4(0.85f, 0.90f, 1.0f, 0.95f), shadow: true);
+            renderer.DrawText(distText, btnX + (btnW - distSz.X) * 0.5f, slider1Y, 0.90f, new Vector4(0.85f, 0.90f, 1.0f, 0.95f), shadow: true);
 
-            float trackX = btnX;
-            float trackY = sliderY + 18f;
-            float trackW = btnW;
-            float trackH = 10f;
+            float track1X = btnX;
+            float track1Y = slider1Y + 16f;
+            float track1W = btnW;
+            float track1H = 9f;
 
             // Slider background track
-            renderer.DrawPanel(trackX, trackY, trackW, trackH, new Vector4(0.06f, 0.08f, 0.12f, 0.95f), new Vector4(0.30f, 0.35f, 0.45f, 0.8f), 1.0f);
+            renderer.DrawPanel(track1X, track1Y, track1W, track1H, new Vector4(0.06f, 0.08f, 0.12f, 0.95f), new Vector4(0.30f, 0.35f, 0.45f, 0.8f), 1.0f);
 
             // Slider fill
             float t = Math.Clamp((curDist - 2f) / 14f, 0f, 1f);
-            float fillW = t * trackW;
+            float fillW = t * track1W;
             if (fillW > 0f)
             {
-                renderer.DrawQuad(trackX + 1f, trackY + 1f, fillW - 2f, trackH - 2f, new Vector4(0.25f, 0.65f, 1.0f, 0.85f));
+                renderer.DrawQuad(track1X + 1f, track1Y + 1f, fillW - 2f, track1H - 2f, new Vector4(0.25f, 0.65f, 1.0f, 0.85f));
             }
 
             // Slider handle / knob
             float knobW = 16f;
-            float knobH = 20f;
-            float knobX = trackX + t * trackW - knobW * 0.5f;
-            float knobY = trackY + (trackH - knobH) * 0.5f;
+            float knobH = 18f;
+            float knobX = track1X + t * track1W - knobW * 0.5f;
+            float knobY = track1Y + (track1H - knobH) * 0.5f;
 
             bool isKnobHovered = (mousePos.X >= knobX && mousePos.X <= knobX + knobW && mousePos.Y >= knobY && mousePos.Y <= knobY + knobH) || isDraggingRenderDistanceSlider;
             Vector4 knobBg = isKnobHovered ? new Vector4(0.95f, 0.98f, 1.0f, 1.0f) : new Vector4(0.75f, 0.85f, 0.98f, 0.95f);
             Vector4 knobBorder = isKnobHovered ? new Vector4(0.30f, 0.80f, 1.0f, 1.0f) : new Vector4(0.35f, 0.45f, 0.60f, 0.9f);
             renderer.DrawPanel(knobX, knobY, knobW, knobH, knobBg, knobBorder, 1.5f);
 
-            // Button 6: Quit to Desktop
-            float btn6Y = sliderY + 42f;
+            // Section 7: FOV Slider (30 to 110 degrees)
+            float slider2Y = track1Y + track1H + 8f;
+            int curFov = (int)MathF.Round(player?.Camera?.BaseFov ?? 70f);
+            string fovText = curFov == 70 ? "FOV: 70 (NORMAL)" : (curFov == 110 ? "FOV: 110 (QUAKE PRO)" : $"FOV: {curFov}");
+            Vector2 fovSz = renderer.MeasureText(fovText, 0.90f);
+            renderer.DrawText(fovText, btnX + (btnW - fovSz.X) * 0.5f, slider2Y, 0.90f, new Vector4(0.85f, 0.90f, 1.0f, 0.95f), shadow: true);
+
+            float track2X = btnX;
+            float track2Y = slider2Y + 16f;
+            float track2W = btnW;
+            float track2H = 9f;
+
+            // FOV Slider background track
+            renderer.DrawPanel(track2X, track2Y, track2W, track2H, new Vector4(0.06f, 0.08f, 0.12f, 0.95f), new Vector4(0.30f, 0.35f, 0.45f, 0.8f), 1.0f);
+
+            // FOV Slider fill
+            float fovT = Math.Clamp((curFov - 30f) / 80f, 0f, 1f);
+            float fovFillW = fovT * track2W;
+            if (fovFillW > 0f)
+            {
+                renderer.DrawQuad(track2X + 1f, track2Y + 1f, fovFillW - 2f, track2H - 2f, new Vector4(0.25f, 0.65f, 1.0f, 0.85f));
+            }
+
+            // FOV Slider handle / knob
+            float fovKnobW = 16f;
+            float fovKnobH = 18f;
+            float fovKnobX = track2X + fovT * track2W - fovKnobW * 0.5f;
+            float fovKnobY = track2Y + (track2H - fovKnobH) * 0.5f;
+
+            bool isFovKnobHovered = (mousePos.X >= fovKnobX && mousePos.X <= fovKnobX + fovKnobW && mousePos.Y >= fovKnobY && mousePos.Y <= fovKnobY + fovKnobH) || isDraggingFovSlider;
+            Vector4 fovKnobBg = isFovKnobHovered ? new Vector4(0.95f, 0.98f, 1.0f, 1.0f) : new Vector4(0.75f, 0.85f, 0.98f, 0.95f);
+            Vector4 fovKnobBorder = isFovKnobHovered ? new Vector4(0.30f, 0.80f, 1.0f, 1.0f) : new Vector4(0.35f, 0.45f, 0.60f, 0.9f);
+            renderer.DrawPanel(fovKnobX, fovKnobY, fovKnobW, fovKnobH, fovKnobBg, fovKnobBorder, 1.5f);
+
+            // Button 8: Quit to Desktop
+            float btn6Y = track2Y + track2H + 12f;
             RenderMenuButton("QUIT TO DESKTOP", btnX, btn6Y, btnW, btnH, mousePos, isDestructive: true);
         }
 
-        private void RenderMenuButton(string text, float x, float y, float w, float h, Vector2 mousePos, bool isDestructive = false)
+        private void RenderMenuButton(string text, float x, float y, float w, float h, Vector2 mousePos, bool isDestructive = false, float scale = 1.1f)
         {
             bool isHovered = mousePos.X >= x && mousePos.X <= x + w && mousePos.Y >= y && mousePos.Y <= y + h;
 
@@ -1320,11 +1500,11 @@ namespace VoxelRenderEngine.src.UI
 
             renderer.DrawPanel(x, y, w, h, bg, border, 1.5f);
 
-            Vector2 textSz = renderer.MeasureText(text, 1.1f);
+            Vector2 textSz = renderer.MeasureText(text, scale);
             float tx = x + (w - textSz.X) * 0.5f;
             float ty = y + (h - textSz.Y) * 0.5f;
             Vector4 textColor = isHovered ? Vector4.One : new Vector4(0.85f, 0.88f, 0.95f, 0.9f);
-            renderer.DrawText(text, tx, ty, 1.1f, textColor, shadow: true);
+            renderer.DrawText(text, tx, ty, scale, textColor, shadow: true);
         }
 
         private void UpdateFpsCounter()
@@ -1354,6 +1534,111 @@ namespace VoxelRenderEngine.src.UI
                 fpsFrameCounter = 0;
                 lastFpsTimestamp = now;
             }
+        }
+
+        private void RenderScreenshotToast(int screenW, int screenH)
+        {
+            if (screenshotNotificationStartTime == 0) return;
+
+            double elapsed = (double)(System.Diagnostics.Stopwatch.GetTimestamp() - screenshotNotificationStartTime) / System.Diagnostics.Stopwatch.Frequency;
+            if (elapsed >= 3.5)
+            {
+                screenshotNotificationStartTime = 0;
+                return;
+            }
+
+            float alpha = 1.0f;
+            if (elapsed > 2.5)
+            {
+                alpha = (float)((3.5 - elapsed) / 1.0);
+            }
+
+            float textScale = 0.95f;
+            Vector2 textSz = renderer.MeasureText(screenshotNotificationMessage, textScale);
+            float padX = 10f;
+            float padY = 6f;
+            float toastW = textSz.X + padX * 2f;
+            float toastH = textSz.Y + padY * 2f;
+
+            float toastX = 16f;
+            float toastY = screenH - toastH - 16f;
+
+            // Semi-transparent dark panel with subtle Minecraft-style green accent
+            Vector4 bg = new Vector4(0.08f, 0.09f, 0.12f, 0.85f * alpha);
+            Vector4 border = new Vector4(0.35f, 0.80f, 0.45f, 0.90f * alpha);
+            renderer.DrawPanel(toastX, toastY, toastW, toastH, bg, border, 1.2f);
+
+            // Toast message text
+            Vector4 textColor = new Vector4(0.95f, 0.98f, 0.95f, alpha);
+            renderer.DrawText(screenshotNotificationMessage, toastX + padX, toastY + padY, textScale, textColor, shadow: true);
+        }
+
+        private void RenderSleepingScreen(int screenW, int screenH)
+        {
+            if (sleepStartTime == 0) return;
+
+            double elapsed = (double)(System.Diagnostics.Stopwatch.GetTimestamp() - sleepStartTime) / System.Diagnostics.Stopwatch.Frequency;
+            if (elapsed >= SLEEP_TOTAL_SECONDS)
+            {
+                sleepStartTime = 0;
+                return;
+            }
+
+            // At midpoint (0.75s), skip night!
+            if (elapsed >= 0.75 && !hasSkippedNightThisSleep)
+            {
+                hasSkippedNightThisSleep = true;
+                if (DayNightCycle != null)
+                {
+                    DayNightCycle.TimeOfDay = DayNightCycle.DAWN_DURATION;
+                    DayNightCycle.DaysSurvived++;
+                    DayNightCycle.Update(0f);
+                }
+                if (player != null)
+                {
+                    player.Health = player.MaxHealth;
+                    player.Stamina = player.MaxStamina;
+                    player.FallDistance = 0f;
+                }
+            }
+
+            float progress = (float)(elapsed / SLEEP_TOTAL_SECONDS); // 0.0 to 1.0
+            float overlayAlpha;
+            if (progress < 0.40f)
+            {
+                overlayAlpha = (progress / 0.40f) * 0.95f;
+            }
+            else if (progress < 0.65f)
+            {
+                overlayAlpha = 0.95f;
+            }
+            else
+            {
+                overlayAlpha = (1.0f - (progress - 0.65f) / 0.35f) * 0.95f;
+            }
+
+            // Draw full-screen dark sleeping backdrop
+            renderer.DrawQuad(0, 0, screenW, screenH, new Vector4(0.04f, 0.05f, 0.08f, overlayAlpha));
+
+            float centerX = screenW * 0.5f;
+            float centerY = screenH * 0.5f;
+            string sleepingText = progress < 0.55f ? "Sleeping..." : "Waking up...";
+            string subText = "Passing the night...";
+
+            float textAlpha = Math.Clamp(overlayAlpha / 0.95f, 0f, 1f);
+            Vector2 sz1 = renderer.MeasureText(sleepingText, 1.6f);
+            Vector2 sz2 = renderer.MeasureText(subText, 1.05f);
+
+            renderer.DrawText(sleepingText, centerX - sz1.X * 0.5f, centerY - 32f, 1.6f, new Vector4(1f, 1f, 1f, textAlpha), shadow: true);
+            renderer.DrawText(subText, centerX - sz2.X * 0.5f, centerY + 8f, 1.05f, new Vector4(0.75f, 0.85f, 0.95f, textAlpha * 0.9f), shadow: true);
+
+            // Progress bar
+            float barW = 200f;
+            float barH = 6f;
+            float barX = centerX - barW * 0.5f;
+            float barY = centerY + 42f;
+            renderer.DrawQuad(barX, barY, barW, barH, new Vector4(0.2f, 0.2f, 0.25f, textAlpha * 0.6f));
+            renderer.DrawQuad(barX, barY, barW * progress, barH, new Vector4(0.35f, 0.75f, 1.0f, textAlpha * 0.95f));
         }
     }
 }

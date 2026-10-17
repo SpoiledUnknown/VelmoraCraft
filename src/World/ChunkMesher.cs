@@ -193,7 +193,15 @@ namespace VoxelRenderEngine.src.World
             }
             else if (blockDef.MeshType == MeshType.CrossQuad)
             {
-                AddCrossQuad(bx, by, bz, blockDef, builder);
+                if (blockDef.Type == BlockType.Wheat)
+                {
+                    byte stage = chunk.GetMetadata(x, y, z);
+                    AddWheatMesh(bx, by, bz, blockDef, stage, builder);
+                }
+                else
+                {
+                    AddCrossQuad(bx, by, bz, blockDef, builder);
+                }
             }
             else if (blockDef.MeshType == MeshType.FlatSurface)
             {
@@ -222,6 +230,11 @@ namespace VoxelRenderEngine.src.World
             else if (blockDef.MeshType == MeshType.WallButton)
             {
                 AddButton(bx, by, bz, blockDef, builder);
+            }
+            else if (blockDef.MeshType == MeshType.Bed)
+            {
+                byte facing = chunk.GetMetadata(x, y, z);
+                AddBed(bx, by, bz, blockDef, facing, builder);
             }
         }
 
@@ -687,6 +700,37 @@ namespace VoxelRenderEngine.src.World
             );
         }
 
+        private static void AddWheatMesh(
+            float bx, float by, float bz, BlockDefinition def, byte stage,
+            ChunkMeshBuilder builder)
+        {
+            // Textures from (7, 5) to (15, 5), with 15,5 being complete wheat and 7,5 being seeds
+            int col = (stage >= 7) ? 15 : (7 + Math.Clamp((int)stage, 0, 6));
+            Vector2 uv = new Vector2(col, 5);
+            Vector3 tint = def.TintColor;
+            float r = 0.35f;
+
+            // Diagonal 1
+            AddDoubleSidedQuad(
+                new Vector3(bx - r, by + 0.45f, bz - r),
+                new Vector3(bx + r, by + 0.45f, bz + r),
+                new Vector3(bx + r, by - 0.5f,  bz + r),
+                new Vector3(bx - r, by - 0.5f,  bz - r),
+                uv, tint, new Vector3(-0.7f, 0, 0.7f),
+                builder
+            );
+
+            // Diagonal 2
+            AddDoubleSidedQuad(
+                new Vector3(bx - r, by + 0.45f, bz + r),
+                new Vector3(bx + r, by + 0.45f, bz - r),
+                new Vector3(bx + r, by - 0.5f,  bz - r),
+                new Vector3(bx - r, by - 0.5f,  bz + r),
+                uv, tint, new Vector3(0.7f, 0, 0.7f),
+                builder
+            );
+        }
+
         private static void AddRailMesh(
             float bx, float by, float bz, BlockDefinition def, byte shape,
             ChunkMeshBuilder builder)
@@ -835,6 +879,72 @@ namespace VoxelRenderEngine.src.World
                 uv, tint, Vector3.UnitY,
                 builder
             );
+        }
+
+        private static void AddBed(
+            float bx, float by, float bz, BlockDefinition def, byte facing,
+            ChunkMeshBuilder builder)
+        {
+            float x0 = bx - 0.5f;
+            float x1 = bx + 0.5f;
+            float y0 = by - 0.5f;
+            float y1 = by + 0.0625f; // 9/16 standard bed height
+            float z0 = bz - 0.5f;
+            float z1 = bz + 0.5f;
+
+            bool isHead = (def.Type == BlockType.BedHead);
+            Vector2 topUV = isHead ? new Vector2(7, 8) : new Vector2(6, 8);
+            Vector2 endUV = isHead ? new Vector2(5, 9) : new Vector2(6, 9);
+            Vector2 sideUV = isHead ? new Vector2(7, 9) : new Vector2(8, 9);
+            Vector2 bottomUV = new Vector2(4, 0); // Wooden planks bottom
+            Vector3 tint = def.TintColor;
+
+            // 1. Top face (+Y)
+            AddBoxFaceWithUV(new Vector3(x0, y1, z0), new Vector3(x1, y1, z0), new Vector3(x1, y1, z1), new Vector3(x0, y1, z1), topUV, tint, Vector3.UnitY, builder);
+
+            // 2. Bottom face (-Y)
+            AddBoxFaceWithUV(new Vector3(x0, y0, z1), new Vector3(x1, y0, z1), new Vector3(x1, y0, z0), new Vector3(x0, y0, z0), bottomUV, tint, -Vector3.UnitY, builder);
+
+            // 3. Side & End faces based on facing
+            // facing: 0 = South (+Z), 1 = North (-Z), 2 = West (-X), 3 = East (+X)
+            if (facing == 2 || facing == 3) // Facing along X
+            {
+                // North (-Z) & South (+Z) are side faces
+                AddBoxFaceWithUV(new Vector3(x0, y1, z1), new Vector3(x1, y1, z1), new Vector3(x1, y0, z1), new Vector3(x0, y0, z1), sideUV, tint, Vector3.UnitZ, builder);
+                AddBoxFaceWithUV(new Vector3(x1, y1, z0), new Vector3(x0, y1, z0), new Vector3(x0, y0, z0), new Vector3(x1, y0, z0), sideUV, tint, -Vector3.UnitZ, builder);
+
+                // Ends: West (-X) and East (+X)
+                Vector2 westUV = (facing == 2) ? (!isHead ? endUV : sideUV) : (isHead ? endUV : sideUV);
+                Vector2 eastUV = (facing == 3) ? (!isHead ? endUV : sideUV) : (isHead ? endUV : sideUV);
+
+                AddBoxFaceWithUV(new Vector3(x0, y1, z0), new Vector3(x0, y1, z1), new Vector3(x0, y0, z1), new Vector3(x0, y0, z0), westUV, tint, -Vector3.UnitX, builder);
+                AddBoxFaceWithUV(new Vector3(x1, y1, z1), new Vector3(x1, y1, z0), new Vector3(x1, y0, z0), new Vector3(x1, y0, z1), eastUV, tint, Vector3.UnitX, builder);
+            }
+            else // Default facing along Z (0 = South, 1 = North)
+            {
+                // West (-X) & East (+X) are side faces
+                AddBoxFaceWithUV(new Vector3(x0, y1, z0), new Vector3(x0, y1, z1), new Vector3(x0, y0, z1), new Vector3(x0, y0, z0), sideUV, tint, -Vector3.UnitX, builder);
+                AddBoxFaceWithUV(new Vector3(x1, y1, z1), new Vector3(x1, y1, z0), new Vector3(x1, y0, z0), new Vector3(x1, y0, z1), sideUV, tint, Vector3.UnitX, builder);
+
+                // Ends: North (-Z) and South (+Z)
+                Vector2 northUV = (facing == 1) ? (!isHead ? endUV : sideUV) : (isHead ? endUV : sideUV);
+                Vector2 southUV = (facing == 0) ? (!isHead ? endUV : sideUV) : (isHead ? endUV : sideUV);
+
+                AddBoxFaceWithUV(new Vector3(x1, y1, z0), new Vector3(x0, y1, z0), new Vector3(x0, y0, z0), new Vector3(x1, y0, z0), northUV, tint, -Vector3.UnitZ, builder);
+                AddBoxFaceWithUV(new Vector3(x0, y1, z1), new Vector3(x1, y1, z1), new Vector3(x1, y0, z1), new Vector3(x0, y0, z1), southUV, tint, Vector3.UnitZ, builder);
+            }
+        }
+
+        private static void AddBoxFaceWithUV(
+            Vector3 pos0, Vector3 pos1, Vector3 pos2, Vector3 pos3,
+            Vector2 atlasCoord, Vector3 tint, Vector3 normal,
+            ChunkMeshBuilder builder)
+        {
+            float u0 = atlasCoord.X / ATLAS_SIZE;
+            float u1 = (atlasCoord.X + 1f) / ATLAS_SIZE;
+            float v0 = 1.0f - ((atlasCoord.Y + 1f) / ATLAS_SIZE);
+            float v1 = 1.0f - (atlasCoord.Y / ATLAS_SIZE);
+            builder.AddQuad(pos0, pos1, pos2, pos3, u0, v0, u1, v1, tint, normal);
         }
     }
 }

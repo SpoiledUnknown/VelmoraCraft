@@ -58,6 +58,7 @@ namespace VoxelRenderEngine.src.World
             Vector3i lowerPos = pos;
             Vector3i upperPos = pos;
             bool isCurrentlyOpen = false;
+            bool isIron = false;
 
             if (blockId == (byte)BlockType.DoorLower)
             {
@@ -79,6 +80,30 @@ namespace VoxelRenderEngine.src.World
                 lowerPos = pos - Vector3i.UnitY;
                 isCurrentlyOpen = true;
             }
+            else if (blockId == (byte)BlockType.IronDoorLower)
+            {
+                upperPos = pos + Vector3i.UnitY;
+                isCurrentlyOpen = false;
+                isIron = true;
+            }
+            else if (blockId == (byte)BlockType.IronDoorUpper)
+            {
+                lowerPos = pos - Vector3i.UnitY;
+                isCurrentlyOpen = false;
+                isIron = true;
+            }
+            else if (blockId == (byte)BlockType.IronDoorLowerOpen)
+            {
+                upperPos = pos + Vector3i.UnitY;
+                isCurrentlyOpen = true;
+                isIron = true;
+            }
+            else if (blockId == (byte)BlockType.IronDoorUpperOpen)
+            {
+                lowerPos = pos - Vector3i.UnitY;
+                isCurrentlyOpen = true;
+                isIron = true;
+            }
             else
             {
                 return false;
@@ -87,14 +112,14 @@ namespace VoxelRenderEngine.src.World
             if (isCurrentlyOpen)
             {
                 // Close door
-                world.SetBlockWorld(lowerPos.X, lowerPos.Y, lowerPos.Z, BlockType.DoorLower);
-                world.SetBlockWorld(upperPos.X, upperPos.Y, upperPos.Z, BlockType.DoorUpper);
+                world.SetBlockWorld(lowerPos.X, lowerPos.Y, lowerPos.Z, isIron ? BlockType.IronDoorLower : BlockType.DoorLower);
+                world.SetBlockWorld(upperPos.X, upperPos.Y, upperPos.Z, isIron ? BlockType.IronDoorUpper : BlockType.DoorUpper);
             }
             else
             {
                 // Open door
-                world.SetBlockWorld(lowerPos.X, lowerPos.Y, lowerPos.Z, BlockType.DoorLowerOpen);
-                world.SetBlockWorld(upperPos.X, upperPos.Y, upperPos.Z, BlockType.DoorUpperOpen);
+                world.SetBlockWorld(lowerPos.X, lowerPos.Y, lowerPos.Z, isIron ? BlockType.IronDoorLowerOpen : BlockType.DoorLowerOpen);
+                world.SetBlockWorld(upperPos.X, upperPos.Y, upperPos.Z, isIron ? BlockType.IronDoorUpperOpen : BlockType.DoorUpperOpen);
             }
 
             return true;
@@ -167,14 +192,16 @@ namespace VoxelRenderEngine.src.World
                 // 2. Doors (Redstone activation)
                 if (isPowered)
                 {
-                    if (neighborId == (byte)BlockType.DoorLower || neighborId == (byte)BlockType.DoorUpper)
+                    if (neighborId == (byte)BlockType.DoorLower || neighborId == (byte)BlockType.DoorUpper ||
+                        neighborId == (byte)BlockType.IronDoorLower || neighborId == (byte)BlockType.IronDoorUpper)
                     {
                         SetDoorState(world, neighbor, open: true);
                     }
                 }
                 else
                 {
-                    if (neighborId == (byte)BlockType.DoorLowerOpen || neighborId == (byte)BlockType.DoorUpperOpen)
+                    if (neighborId == (byte)BlockType.DoorLowerOpen || neighborId == (byte)BlockType.DoorUpperOpen ||
+                        neighborId == (byte)BlockType.IronDoorLowerOpen || neighborId == (byte)BlockType.IronDoorUpperOpen)
                     {
                         if (!HasActivePowerNeighbor(world, neighbor, sourcePos))
                         {
@@ -190,6 +217,7 @@ namespace VoxelRenderEngine.src.World
             byte blockId = world.GetBlockWorld(pos.X, pos.Y, pos.Z);
             Vector3i lower = pos;
             Vector3i upper = pos;
+            bool isIron = false;
 
             if (blockId == (byte)BlockType.DoorLower || blockId == (byte)BlockType.DoorLowerOpen)
             {
@@ -199,16 +227,26 @@ namespace VoxelRenderEngine.src.World
             {
                 lower = pos - Vector3i.UnitY;
             }
+            else if (blockId == (byte)BlockType.IronDoorLower || blockId == (byte)BlockType.IronDoorLowerOpen)
+            {
+                upper = pos + Vector3i.UnitY;
+                isIron = true;
+            }
+            else if (blockId == (byte)BlockType.IronDoorUpper || blockId == (byte)BlockType.IronDoorUpperOpen)
+            {
+                lower = pos - Vector3i.UnitY;
+                isIron = true;
+            }
 
             if (open)
             {
-                world.SetBlockWorld(lower.X, lower.Y, lower.Z, BlockType.DoorLowerOpen);
-                world.SetBlockWorld(upper.X, upper.Y, upper.Z, BlockType.DoorUpperOpen);
+                world.SetBlockWorld(lower.X, lower.Y, lower.Z, isIron ? BlockType.IronDoorLowerOpen : BlockType.DoorLowerOpen);
+                world.SetBlockWorld(upper.X, upper.Y, upper.Z, isIron ? BlockType.IronDoorUpperOpen : BlockType.DoorUpperOpen);
             }
             else
             {
-                world.SetBlockWorld(lower.X, lower.Y, lower.Z, BlockType.DoorLower);
-                world.SetBlockWorld(upper.X, upper.Y, upper.Z, BlockType.DoorUpper);
+                world.SetBlockWorld(lower.X, lower.Y, lower.Z, isIron ? BlockType.IronDoorLower : BlockType.DoorLower);
+                world.SetBlockWorld(upper.X, upper.Y, upper.Z, isIron ? BlockType.IronDoorUpper : BlockType.DoorUpper);
             }
         }
 
