@@ -131,7 +131,8 @@ namespace VelmoraCraft.src.World
         TallGrass = 106,
         BedFoot = 107,
         BedHead = 108,
-        WheatSeeds = 109
+        WheatSeeds = 109,
+        Bread = 110
     }
 
     public enum Face : byte
@@ -498,11 +499,12 @@ namespace VelmoraCraft.src.World
             Register(CreateDirectionalBlock(BlockType.Dispenser, "Dispenser", isSolid: true, isTransparent: false, hardness: 3.5f, front: new Vector2(14, 2), side: new Vector2(13, 2), top: new Vector2(14, 3)));
             Register(CreateDirectionalBlock(BlockType.LitFurnace, "Burning Furnace", isSolid: true, isTransparent: false, hardness: 3.5f, front: new Vector2(13, 3), side: new Vector2(13, 2), top: new Vector2(14, 3), isLightSource: true));
             Register(CreateUniformBlock(BlockType.RedstoneTorch, "Redstone Torch", isSolid: false, isTransparent: true, hardness: 0f, new Vector2(3, 6), meshType: MeshType.CrossQuad, isLightSource: true));
-            Register(CreateMultiFaceBlock(BlockType.Jukebox, "Jukebox", isSolid: true, isTransparent: false, hardness: 2.0f, top: new Vector2(11, 4), side: new Vector2(10, 4), bottom: new Vector2(4, 0)));
+            Register(CreateMultiFaceBlock(BlockType.Jukebox, "Jukebox", isSolid: true, isTransparent: false, hardness: 2.0f, top: new Vector2(11, 4), side: new Vector2(10, 4), bottom: new Vector2(10, 4)));
             Register(CreateMultiFaceBlock(BlockType.Pumpkin, "Pumpkin", isSolid: true, isTransparent: false, hardness: 1.0f, top: new Vector2(6, 6), side: new Vector2(6, 7), bottom: new Vector2(6, 6)));
             Register(CreateDirectionalBlock(BlockType.CarvedPumpkin, "Carved Pumpkin", isSolid: true, isTransparent: false, hardness: 1.0f, front: new Vector2(7, 7), side: new Vector2(6, 7), top: new Vector2(6, 6)));
             Register(CreateDirectionalBlock(BlockType.JackOLantern, "Jack o'Lantern", isSolid: true, isTransparent: false, hardness: 1.0f, front: new Vector2(8, 7), side: new Vector2(6, 7), top: new Vector2(6, 6), isLightSource: true));
-            Register(CreateMultiFaceBlock(BlockType.Cake, "Cake", isSolid: true, isTransparent: true, hardness: 0.5f, top: new Vector2(11, 6), side: new Vector2(12, 6), bottom: new Vector2(14, 6)));
+            Register(CreateMultiFaceBlock(BlockType.Cake, "Cake", isSolid: true, isTransparent: true, hardness: 0.5f, top: new Vector2(9, 7), side: new Vector2(10, 1), bottom: new Vector2(12, 7)));
+            Register(CreateUniformBlock(BlockType.Bread, "Bread", isSolid: false, isTransparent: true, hardness: 0f, new Vector2(8, 5), tintColor: new Vector3(1.35f, 0.95f, 0.50f)));
 
             // --- 16 Wool Colors ---
             Register(CreateUniformBlock(BlockType.WhiteWool, "White Wool", isSolid: true, isTransparent: false, hardness: 0.8f, new Vector2(0, 4)));

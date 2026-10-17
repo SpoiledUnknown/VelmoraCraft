@@ -271,7 +271,7 @@ namespace VelmoraCraft.src.Audio
                 BlockType.DoorLower or BlockType.DoorUpper or BlockType.DoorLowerOpen or BlockType.DoorUpperOpen or
                 BlockType.Chest or BlockType.CraftingTable or BlockType.Bookshelf or BlockType.Jukebox or
                 BlockType.Pumpkin or BlockType.CarvedPumpkin or BlockType.JackOLantern or BlockType.TNT or
-                BlockType.Trapdoor or BlockType.Ladder or BlockType.Cake or BlockType.Sponge or
+                BlockType.Trapdoor or BlockType.Ladder or BlockType.Cake or BlockType.Bread or BlockType.Sponge or
                 BlockType.Glass or BlockType.Ice or BlockType.BedFoot or BlockType.BedHead => "wood",
 
                 BlockType.Water or BlockType.Portal => "water",

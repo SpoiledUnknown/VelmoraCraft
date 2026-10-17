@@ -1,4 +1,4 @@
-﻿namespace VelmoraCraft.src.World
+namespace VelmoraCraft.src.World
 {
     public enum BiomeType : byte
     {
@@ -375,9 +375,9 @@
                             BlockType flower = (floraHash % 2 == 0) ? BlockType.Rose : BlockType.Dandelion;
                             world.SetBlockWorld(wx, surface + 1, wz, flower);
                         }
-                        else if (floraHash % 120 == 0)
+                        else if (floraHash % 48 == 0)
                         {
-                            // Mushrooms in shade
+                            // Red Mushroom (12,1) or Brown Mushroom (13,1) randomly spawned in the world similar to flowers
                             BlockType mushroom = (floraHash % 2 == 0) ? BlockType.RedMushroom : BlockType.BrownMushroom;
                             world.SetBlockWorld(wx, surface + 1, wz, mushroom);
                         }
@@ -386,6 +386,12 @@
                             // Pumpkin patch
                             world.SetBlockWorld(wx, surface + 1, wz, BlockType.Pumpkin);
                         }
+                    }
+                    else if (groundBlock == (byte)BlockType.Dirt && world.GetBlockWorld(wx, surface + 1, wz) == (byte)BlockType.Empty && floraHash % 30 == 0)
+                    {
+                        // Mushrooms thriving on forest dirt floor and shaded terrain
+                        BlockType mushroom = (floraHash % 2 == 0) ? BlockType.RedMushroom : BlockType.BrownMushroom;
+                        world.SetBlockWorld(wx, surface + 1, wz, mushroom);
                     }
                     else if ((groundBlock == (byte)BlockType.Sand || groundBlock == (byte)BlockType.Dirt) && surface <= SEA_LEVEL + 1)
                     {

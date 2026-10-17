@@ -560,8 +560,42 @@ namespace VelmoraCraft.src.World
             byte facing = 0)
         {
             Face texFace = GetOrientedTextureFace(face, facing);
-            float sway = (def.Type == BlockType.Leaves || def.Type == BlockType.SpruceLeaves) ? 2.0f : 0.0f;
-            AddFaceWithUV(face, x, y, z, def.GetFaceAtlasCoord(texFace), def.TintColor, builder, sway);
+            float swayTop = 0f;
+            float swayBottom = 0f;
+
+            if (def.Type == BlockType.Leaves || def.Type == BlockType.SpruceLeaves)
+            {
+                swayTop = 2.0f;
+                swayBottom = 2.0f;
+            }
+            else if (def.Type == BlockType.Water)
+            {
+                if (face == Face.Top)
+                {
+                    swayTop = 3.0f;
+                    swayBottom = 3.0f;
+                }
+                else if (face != Face.Bottom)
+                {
+                    swayTop = 3.0f;
+                    swayBottom = 0.0f;
+                }
+            }
+            else if (def.Type == BlockType.Lava)
+            {
+                if (face == Face.Top)
+                {
+                    swayTop = 4.0f;
+                    swayBottom = 4.0f;
+                }
+                else if (face != Face.Bottom)
+                {
+                    swayTop = 4.0f;
+                    swayBottom = 0.0f;
+                }
+            }
+
+            AddFaceWithUV(face, x, y, z, def.GetFaceAtlasCoord(texFace), def.TintColor, builder, swayTop, swayBottom);
         }
 
         private static Face GetOrientedTextureFace(Face meshFace, byte facing)
@@ -607,7 +641,8 @@ namespace VelmoraCraft.src.World
             Vector2 atlasCoord,
             Vector3 tint,
             ChunkMeshBuilder builder,
-            float sway = 0f)
+            float swayTop = 0f,
+            float swayBottom = 0f)
         {
             Vector3 normal = face switch
             {
@@ -678,7 +713,7 @@ namespace VelmoraCraft.src.World
             float v0 = 1.0f - ((atlasCoord.Y + 1f) / ATLAS_SIZE); // bottom of tile
             float v1 = 1.0f - (atlasCoord.Y / ATLAS_SIZE);        // top of tile
 
-            builder.AddQuad(pos0, pos1, pos2, pos3, u0, v0, u1, v1, tint, normal, sway, sway);
+            builder.AddQuad(pos0, pos1, pos2, pos3, u0, v0, u1, v1, tint, normal, swayTop, swayBottom);
         }
 
         private static void AddDoubleSidedQuad(

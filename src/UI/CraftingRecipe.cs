@@ -126,10 +126,12 @@ namespace VelmoraCraft.src.UI
             Recipes.Add(new CraftingRecipe("Dispenser", new ItemStack(BlockType.Dispenser, 1), new[] { (BlockType.Cobblestone, 7), (BlockType.RedstoneOre, 1) }, RecipeStation.CraftingTable));
             Recipes.Add(new CraftingRecipe("Jukebox", new ItemStack(BlockType.Jukebox, 1), new[] { (BlockType.Planks, 8), (BlockType.DiamondOre, 1) }, RecipeStation.CraftingTable));
             Recipes.Add(new CraftingRecipe("Carved Pumpkin", new ItemStack(BlockType.CarvedPumpkin, 1), new[] { (BlockType.Pumpkin, 1) }, RecipeStation.CraftingTable));
+            Recipes.Add(new CraftingRecipe("Burning Furnace", new ItemStack(BlockType.LitFurnace, 1), new[] { (BlockType.Furnace, 1), (BlockType.Coal, 1) }, RecipeStation.CraftingTable));
             Recipes.Add(new CraftingRecipe("Jack-o'-Lantern", new ItemStack(BlockType.JackOLantern, 1), new[] { (BlockType.Pumpkin, 1), (BlockType.Torch, 1) }, RecipeStation.CraftingTable));
+            Recipes.Add(new CraftingRecipe("Jack-o'-Lantern (Quick)", new ItemStack(BlockType.JackOLantern, 1), new[] { (BlockType.Pumpkin, 1), (BlockType.Torch, 1) }, RecipeStation.Personal));
+            Recipes.Add(new CraftingRecipe("Bread", new ItemStack(BlockType.Bread, 1), new[] { (BlockType.Wheat, 3) }, RecipeStation.Personal));
+            Recipes.Add(new CraftingRecipe("Cake", new ItemStack(BlockType.Cake, 1), new[] { (BlockType.Bread, 3) }, RecipeStation.CraftingTable));
             Recipes.Add(new CraftingRecipe("Flint & Steel", new ItemStack(BlockType.FlintAndSteel, 1), new[] { (BlockType.IronIngot, 1), (BlockType.Cobblestone, 1) }, RecipeStation.CraftingTable));
-            Recipes.Add(new CraftingRecipe("Cake", new ItemStack(BlockType.Cake, 1), new[] { (BlockType.Wheat, 3), (BlockType.SugarCane, 2) }, RecipeStation.CraftingTable));
-            Recipes.Add(new CraftingRecipe("Bread", new ItemStack(BlockType.Cake, 1), new[] { (BlockType.Wheat, 3) }, RecipeStation.Personal));
 
             // ==========================================
             // 6. Wool Production & 16 Dyeing Recipes

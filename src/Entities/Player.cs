@@ -1129,8 +1129,8 @@ namespace VelmoraCraft.src.Entities
                         }
                     }
 
-                    // A3. Furnace interaction
-                    if (blockId == (byte)BlockType.Furnace || blockId == (byte)BlockType.LitFurnace)
+                    // A3. Furnace interaction (LitFurnace is purely decorative)
+                    if (blockId == (byte)BlockType.Furnace)
                     {
                         if (OnOpenFurnace != null)
                         {
@@ -1204,6 +1204,38 @@ namespace VelmoraCraft.src.Entities
                             rightClickWasDown = true;
                             return;
                         }
+                    }
+
+                    // G. Cake interaction (eat cake slice to restore health and stamina)
+                    if (blockId == (byte)BlockType.Cake)
+                    {
+                        if (Health < MaxHealth || Stamina < MaxStamina)
+                        {
+                            Health = MathF.Min(MaxHealth, Health + 25.0f);
+                            Stamina = MathF.Min(MaxStamina, Stamina + 30.0f);
+                            world.SetBlockWorld(bp.X, bp.Y, bp.Z, BlockType.Empty);
+                            AudioManager?.PlayCategorySound("cloth", volume: 0.9f);
+                            rightClickWasDown = true;
+                            return;
+                        }
+                    }
+                }
+
+                // Food consumption: Bread in hand
+                if (!hotbarStack.IsEmpty && hotbarStack.Type == BlockType.Bread)
+                {
+                    if (Health < MaxHealth || Stamina < MaxStamina)
+                    {
+                        Health = MathF.Min(MaxHealth, Health + 25.0f);
+                        Stamina = MathF.Min(MaxStamina, Stamina + 25.0f);
+                        Inventory.Slots[SelectedHotbarSlot].Count--;
+                        if (Inventory.Slots[SelectedHotbarSlot].Count <= 0)
+                        {
+                            Inventory.Slots[SelectedHotbarSlot].Clear();
+                        }
+                        AudioManager?.PlayCategorySound("wood", volume: 0.8f);
+                        rightClickWasDown = true;
+                        return;
                     }
                 }
 

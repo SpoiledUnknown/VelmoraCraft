@@ -1,4 +1,4 @@
-﻿using OpenTK.Graphics.OpenGL;
+using OpenTK.Graphics.OpenGL;
 using OpenTK.Mathematics;
 using System.Runtime.InteropServices;
 using VelmoraCraft.src.Graphics;
@@ -237,6 +237,10 @@ namespace VelmoraCraft.src.UI
 
             var def = BlockRegistry.Get(type);
             Vector2 atlasCoord = def.GetFaceAtlasCoord(Face.Front);
+            if (type == BlockType.Cake)
+            {
+                atlasCoord = new Vector2(12, 8);
+            }
 
             const float ATLAS_SIZE = 16f;
             float u0 = atlasCoord.X / ATLAS_SIZE;
@@ -248,6 +252,7 @@ namespace VelmoraCraft.src.UI
             if (type == BlockType.Coal) tint = new Vector3(0.2f, 0.2f, 0.2f);
             if (type == BlockType.IronIngot) tint = new Vector3(1.15f, 1.15f, 1.2f);
             if (type == BlockType.FlintAndSteel) tint = new Vector3(0.9f, 0.95f, 1.0f);
+            if (type == BlockType.Bread) tint = new Vector3(1.4f, 0.95f, 0.50f);
 
             DrawTexturedQuad(x, y, size, size, new Vector2(u0, v0), new Vector2(u1, v1), new Vector4(tint.X, tint.Y, tint.Z, 1.0f));
         }
