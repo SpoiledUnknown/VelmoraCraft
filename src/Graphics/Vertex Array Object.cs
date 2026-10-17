@@ -1,11 +1,11 @@
-using OpenTK.Graphics.OpenGL;
+﻿using OpenTK.Graphics.OpenGL;
 using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 
-namespace VoxelRenderEngine.src.Graphics
+namespace VelmoraCraft.src.Graphics
 {
     internal class VertexArrayObject
     {

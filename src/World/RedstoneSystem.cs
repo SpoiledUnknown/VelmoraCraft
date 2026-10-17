@@ -1,6 +1,6 @@
 using OpenTK.Mathematics;
 
-namespace VoxelRenderEngine.src.World
+namespace VelmoraCraft.src.World
 {
     public struct ScheduledBlockRevert
     {
@@ -109,17 +109,24 @@ namespace VoxelRenderEngine.src.World
                 return false;
             }
 
+            byte doorMeta = world.GetBlockMetadata(lowerPos.X, lowerPos.Y, lowerPos.Z);
+            if (doorMeta == 0)
+            {
+                byte uMeta = world.GetBlockMetadata(upperPos.X, upperPos.Y, upperPos.Z);
+                if (uMeta != 0) doorMeta = uMeta;
+            }
+
             if (isCurrentlyOpen)
             {
                 // Close door
-                world.SetBlockWorld(lowerPos.X, lowerPos.Y, lowerPos.Z, isIron ? BlockType.IronDoorLower : BlockType.DoorLower);
-                world.SetBlockWorld(upperPos.X, upperPos.Y, upperPos.Z, isIron ? BlockType.IronDoorUpper : BlockType.DoorUpper);
+                world.SetBlockWorld(lowerPos.X, lowerPos.Y, lowerPos.Z, isIron ? BlockType.IronDoorLower : BlockType.DoorLower, metadata: doorMeta);
+                world.SetBlockWorld(upperPos.X, upperPos.Y, upperPos.Z, isIron ? BlockType.IronDoorUpper : BlockType.DoorUpper, metadata: doorMeta);
             }
             else
             {
                 // Open door
-                world.SetBlockWorld(lowerPos.X, lowerPos.Y, lowerPos.Z, isIron ? BlockType.IronDoorLowerOpen : BlockType.DoorLowerOpen);
-                world.SetBlockWorld(upperPos.X, upperPos.Y, upperPos.Z, isIron ? BlockType.IronDoorUpperOpen : BlockType.DoorUpperOpen);
+                world.SetBlockWorld(lowerPos.X, lowerPos.Y, lowerPos.Z, isIron ? BlockType.IronDoorLowerOpen : BlockType.DoorLowerOpen, metadata: doorMeta);
+                world.SetBlockWorld(upperPos.X, upperPos.Y, upperPos.Z, isIron ? BlockType.IronDoorUpperOpen : BlockType.DoorUpperOpen, metadata: doorMeta);
             }
 
             return true;
@@ -238,15 +245,22 @@ namespace VoxelRenderEngine.src.World
                 isIron = true;
             }
 
+            byte doorMeta = world.GetBlockMetadata(lower.X, lower.Y, lower.Z);
+            if (doorMeta == 0)
+            {
+                byte uMeta = world.GetBlockMetadata(upper.X, upper.Y, upper.Z);
+                if (uMeta != 0) doorMeta = uMeta;
+            }
+
             if (open)
             {
-                world.SetBlockWorld(lower.X, lower.Y, lower.Z, isIron ? BlockType.IronDoorLowerOpen : BlockType.DoorLowerOpen);
-                world.SetBlockWorld(upper.X, upper.Y, upper.Z, isIron ? BlockType.IronDoorUpperOpen : BlockType.DoorUpperOpen);
+                world.SetBlockWorld(lower.X, lower.Y, lower.Z, isIron ? BlockType.IronDoorLowerOpen : BlockType.DoorLowerOpen, metadata: doorMeta);
+                world.SetBlockWorld(upper.X, upper.Y, upper.Z, isIron ? BlockType.IronDoorUpperOpen : BlockType.DoorUpperOpen, metadata: doorMeta);
             }
             else
             {
-                world.SetBlockWorld(lower.X, lower.Y, lower.Z, isIron ? BlockType.IronDoorLower : BlockType.DoorLower);
-                world.SetBlockWorld(upper.X, upper.Y, upper.Z, isIron ? BlockType.IronDoorUpper : BlockType.DoorUpper);
+                world.SetBlockWorld(lower.X, lower.Y, lower.Z, isIron ? BlockType.IronDoorLower : BlockType.DoorLower, metadata: doorMeta);
+                world.SetBlockWorld(upper.X, upper.Y, upper.Z, isIron ? BlockType.IronDoorUpper : BlockType.DoorUpper, metadata: doorMeta);
             }
         }
 

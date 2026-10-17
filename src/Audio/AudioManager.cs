@@ -2,11 +2,11 @@ using System.Runtime.InteropServices;
 using OpenTK.Audio.OpenAL;
 using OpenTK.Audio.OpenAL.ALC;
 using OpenTK.Mathematics;
-using VoxelRenderEngine.src.World;
+using VelmoraCraft.src.World;
 using ALC = OpenTK.Audio.OpenAL.ALC.ALC;
 using AL = OpenTK.Audio.OpenAL.AL;
 
-namespace VoxelRenderEngine.src.Audio
+namespace VelmoraCraft.src.Audio
 {
     public class AudioManager : IDisposable
     {
@@ -25,6 +25,10 @@ namespace VoxelRenderEngine.src.Audio
         // Dedicated music source
         private int musicSource = 0;
         private string? currentPlayingMusic = null;
+
+        // Background music playlist from Background folder
+        private readonly List<string> backgroundPlaylist = new List<string>();
+        private int currentBackgroundIndex = -1;
 
         // Configurable music paths
         public string? AmbientMusicPath { get; set; }
@@ -45,7 +49,11 @@ namespace VoxelRenderEngine.src.Audio
             InitializeOpenAL();
             DiscoverAudioFiles();
 
-            if (!string.IsNullOrEmpty(AmbientMusicPath))
+            if (backgroundPlaylist.Count > 0)
+            {
+                PlayNextBackgroundMusic();
+            }
+            else if (!string.IsNullOrEmpty(AmbientMusicPath))
             {
                 PlayMusic(AmbientMusicPath, loop: true);
             }
@@ -135,6 +143,34 @@ namespace VoxelRenderEngine.src.Audio
                 if (bg1Candidate != null)
                 {
                     AmbientMusicPath = bg1Candidate;
+                }
+            }
+
+            // Discover all music tracks from Background folder
+            backgroundPlaylist.Clear();
+            string[] candidateBgDirs = new string[]
+            {
+                Path.Combine(baseDir, "Audio", "Background"),
+                Path.Combine(Directory.GetCurrentDirectory(), "Audio", "Background"),
+                Path.Combine(baseDir, "Background"),
+                Path.Combine(Directory.GetCurrentDirectory(), "Background")
+            };
+
+            foreach (var bgDir in candidateBgDirs)
+            {
+                if (Directory.Exists(bgDir))
+                {
+                    var files = Directory.GetFiles(bgDir, "*.*")
+                        .Where(f => f.EndsWith(".mp3", StringComparison.OrdinalIgnoreCase) || f.EndsWith(".wav", StringComparison.OrdinalIgnoreCase))
+                        .ToArray();
+
+                    foreach (var file in files)
+                    {
+                        if (!backgroundPlaylist.Contains(file, StringComparer.OrdinalIgnoreCase))
+                        {
+                            backgroundPlaylist.Add(file);
+                        }
+                    }
                 }
             }
 
@@ -340,12 +376,41 @@ namespace VoxelRenderEngine.src.Audio
             currentPlayingMusic = null;
         }
 
+        public void PlayNextBackgroundMusic()
+        {
+            if (!isInitialized || backgroundPlaylist.Count == 0) return;
+
+            if (backgroundPlaylist.Count == 1)
+            {
+                currentBackgroundIndex = 0;
+                PlayMusic(backgroundPlaylist[0], loop: true);
+            }
+            else
+            {
+                int nextIndex = random.Next(backgroundPlaylist.Count);
+                if (nextIndex == currentBackgroundIndex && backgroundPlaylist.Count > 1)
+                {
+                    nextIndex = (nextIndex + 1) % backgroundPlaylist.Count;
+                }
+                currentBackgroundIndex = nextIndex;
+                PlayMusic(backgroundPlaylist[currentBackgroundIndex], loop: false);
+            }
+        }
+
         public void Update(DayNightPhase phase, float deltaTime)
         {
             if (!isInitialized) return;
 
-            // Ensure background music (bg1) is playing continuously all the time
-            if (!string.IsNullOrEmpty(AmbientMusicPath))
+            // Automatically select and play music from the Background folder
+            if (backgroundPlaylist.Count > 0)
+            {
+                int state = AL.GetSourcei(musicSource, (SourceGetPNameI)0x1010);
+                if (state != 0x1012) // AL_PLAYING = 0x1012
+                {
+                    PlayNextBackgroundMusic();
+                }
+            }
+            else if (!string.IsNullOrEmpty(AmbientMusicPath))
             {
                 int state = AL.GetSourcei(musicSource, (SourceGetPNameI)0x1010);
                 if (state != 0x1012) // AL_PLAYING = 0x1012

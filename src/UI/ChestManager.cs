@@ -1,7 +1,7 @@
-using OpenTK.Mathematics;
-using VoxelRenderEngine.src.World;
+﻿using OpenTK.Mathematics;
+using VelmoraCraft.src.World;
 
-namespace VoxelRenderEngine.src.UI
+namespace VelmoraCraft.src.UI
 {
     public class DoubleChestInventory : Inventory
     {

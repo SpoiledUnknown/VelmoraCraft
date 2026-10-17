@@ -1,10 +1,10 @@
-using OpenTK.Graphics.OpenGL;
+﻿using OpenTK.Graphics.OpenGL;
 using OpenTK.Mathematics;
 using System.Runtime.InteropServices;
-using VoxelRenderEngine.src.Graphics;
-using VoxelRenderEngine.src.World;
+using VelmoraCraft.src.Graphics;
+using VelmoraCraft.src.World;
 
-namespace VoxelRenderEngine.src.UI
+namespace VelmoraCraft.src.UI
 {
     [StructLayout(LayoutKind.Sequential)]
     public struct UIVertex

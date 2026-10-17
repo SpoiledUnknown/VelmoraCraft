@@ -1,4 +1,4 @@
-namespace VoxelRenderEngine.src.World
+﻿namespace VelmoraCraft.src.World
 {
     public enum BiomeType : byte
     {

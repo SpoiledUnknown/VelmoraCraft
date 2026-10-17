@@ -1,6 +1,6 @@
 using OpenTK.Mathematics;
 
-namespace VoxelRenderEngine.src
+namespace VelmoraCraft.src
 {
     public class Camera
     {
@@ -20,6 +20,12 @@ namespace VoxelRenderEngine.src
         {
             get => currentFov;
             set => currentFov = Math.Clamp(value, 30.0f, 130.0f);
+        }
+
+        public float FarPlane
+        {
+            get => farPlane;
+            set => farPlane = Math.Max(10.0f, value);
         }
 
         public Vector3 Position { get; set; }

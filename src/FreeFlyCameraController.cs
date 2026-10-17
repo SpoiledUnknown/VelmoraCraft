@@ -1,8 +1,8 @@
-using OpenTK.Mathematics;
+﻿using OpenTK.Mathematics;
 using OpenTK.Windowing.GraphicsLibraryFramework;
-using VoxelRenderEngine.src.World;
+using VelmoraCraft.src.World;
 
-namespace VoxelRenderEngine.src
+namespace VelmoraCraft.src
 {
     public class FreeFlyCameraController
     {

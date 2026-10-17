@@ -1,6 +1,6 @@
-using VoxelRenderEngine.src.World;
+using VelmoraCraft.src.World;
 
-namespace VoxelRenderEngine.src.UI
+namespace VelmoraCraft.src.UI
 {
     public enum RecipeStation
     {
@@ -71,7 +71,16 @@ namespace VoxelRenderEngine.src.UI
             Recipes.Add(new CraftingRecipe("Trapdoor (x2)", new ItemStack(BlockType.Trapdoor, 2), new[] { (BlockType.Planks, 6) }, RecipeStation.CraftingTable));
             Recipes.Add(new CraftingRecipe("Wooden Door", new ItemStack(BlockType.DoorLower, 1), new[] { (BlockType.Planks, 6) }, RecipeStation.CraftingTable));
             Recipes.Add(new CraftingRecipe("Iron Door", new ItemStack(BlockType.IronDoorLower, 1), new[] { (BlockType.IronIngot, 6) }, RecipeStation.CraftingTable));
-            Recipes.Add(new CraftingRecipe("Bed", new ItemStack(BlockType.BedFoot, 1), new[] { (BlockType.WhiteWool, 3), (BlockType.Planks, 3) }, RecipeStation.CraftingTable));
+            Recipes.Add(new CraftingRecipe("Bed (White)", new ItemStack(BlockType.BedFoot, 1), new[] { (BlockType.WhiteWool, 3), (BlockType.Planks, 3) }, RecipeStation.CraftingTable));
+            Recipes.Add(new CraftingRecipe("Bed (Red)", new ItemStack(BlockType.BedFoot, 1), new[] { (BlockType.RedWool, 3), (BlockType.Planks, 3) }, RecipeStation.CraftingTable));
+            Recipes.Add(new CraftingRecipe("Bed (Blue)", new ItemStack(BlockType.BedFoot, 1), new[] { (BlockType.BlueWool, 3), (BlockType.Planks, 3) }, RecipeStation.CraftingTable));
+            Recipes.Add(new CraftingRecipe("Bed (Yellow)", new ItemStack(BlockType.BedFoot, 1), new[] { (BlockType.YellowWool, 3), (BlockType.Planks, 3) }, RecipeStation.CraftingTable));
+            Recipes.Add(new CraftingRecipe("Bed (Green)", new ItemStack(BlockType.BedFoot, 1), new[] { (BlockType.GreenWool, 3), (BlockType.Planks, 3) }, RecipeStation.CraftingTable));
+            Recipes.Add(new CraftingRecipe("Bed (Black)", new ItemStack(BlockType.BedFoot, 1), new[] { (BlockType.BlackWool, 3), (BlockType.Planks, 3) }, RecipeStation.CraftingTable));
+            Recipes.Add(new CraftingRecipe("Bed (Brown)", new ItemStack(BlockType.BedFoot, 1), new[] { (BlockType.BrownWool, 3), (BlockType.Planks, 3) }, RecipeStation.CraftingTable));
+            Recipes.Add(new CraftingRecipe("Bed (Orange)", new ItemStack(BlockType.BedFoot, 1), new[] { (BlockType.OrangeWool, 3), (BlockType.Planks, 3) }, RecipeStation.CraftingTable));
+            Recipes.Add(new CraftingRecipe("Bed (Purple)", new ItemStack(BlockType.BedFoot, 1), new[] { (BlockType.PurpleWool, 3), (BlockType.Planks, 3) }, RecipeStation.CraftingTable));
+            Recipes.Add(new CraftingRecipe("Bed (Gray)", new ItemStack(BlockType.BedFoot, 1), new[] { (BlockType.GrayWool, 3), (BlockType.Planks, 3) }, RecipeStation.CraftingTable));
             Recipes.Add(new CraftingRecipe("Bookshelf", new ItemStack(BlockType.Bookshelf, 1), new[] { (BlockType.Planks, 6), (BlockType.SugarCane, 3) }, RecipeStation.CraftingTable));
 
             // ==========================================
@@ -125,7 +134,10 @@ namespace VoxelRenderEngine.src.UI
             // ==========================================
             // 6. Wool Production & 16 Dyeing Recipes
             // ==========================================
-            Recipes.Add(new CraftingRecipe("White Wool (x2)", new ItemStack(BlockType.WhiteWool, 2), new[] { (BlockType.Cobweb, 4) }, RecipeStation.Personal));
+            Recipes.Add(new CraftingRecipe("White Wool", new ItemStack(BlockType.WhiteWool, 1), new[] { (BlockType.Cobweb, 1) }, RecipeStation.Personal));
+            Recipes.Add(new CraftingRecipe("White Wool (x4)", new ItemStack(BlockType.WhiteWool, 4), new[] { (BlockType.Cobweb, 4) }, RecipeStation.Personal));
+            Recipes.Add(new CraftingRecipe("Cobweb from Wool (x2)", new ItemStack(BlockType.Cobweb, 2), new[] { (BlockType.WhiteWool, 1) }, RecipeStation.Personal));
+            Recipes.Add(new CraftingRecipe("Wheat Seeds (x2)", new ItemStack(BlockType.WheatSeeds, 2), new[] { (BlockType.Wheat, 1) }, RecipeStation.Personal));
             Recipes.Add(new CraftingRecipe("Red Wool", new ItemStack(BlockType.RedWool, 1), new[] { (BlockType.WhiteWool, 1), (BlockType.Rose, 1) }, RecipeStation.Personal));
             Recipes.Add(new CraftingRecipe("Yellow Wool", new ItemStack(BlockType.YellowWool, 1), new[] { (BlockType.WhiteWool, 1), (BlockType.Dandelion, 1) }, RecipeStation.Personal));
             Recipes.Add(new CraftingRecipe("Green Wool", new ItemStack(BlockType.GreenWool, 1), new[] { (BlockType.WhiteWool, 1), (BlockType.Cactus, 1) }, RecipeStation.CraftingTable));

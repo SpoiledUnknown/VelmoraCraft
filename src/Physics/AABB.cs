@@ -1,6 +1,6 @@
-using OpenTK.Mathematics;
+﻿using OpenTK.Mathematics;
 
-namespace VoxelRenderEngine.src.Physics
+namespace VelmoraCraft.src.Physics
 {
     public struct AABB
     {

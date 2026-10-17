@@ -1,4 +1,4 @@
-# Voxel Render Engine
+# VelmoraCraft
 
 A small voxel rendering experiment built with **C# and OpenTK** while learning **OpenGL**.
 
@@ -37,7 +37,7 @@ OpenTK is available for Windows, Linux and other platforms, provided the system 
 
 ```bash
 git clone <repository-url>
-cd VoxelRenderer
+cd VelmoraCraft
 ```
 
 open the project in **Visual Studio**, **Rider**, or another C# IDE and run it normally.
@@ -55,7 +55,7 @@ open the project in **Visual Studio**, **Rider**, or another C# IDE and run it n
 ## Project Structure
 
 ```text
-VoxelRenderer/
+VelmoraCraft/
 ├── Program.cs
 ├── Game.cs
 ├── Shaders/

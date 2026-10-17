@@ -1,7 +1,7 @@
-using OpenTK.Mathematics;
-using VoxelRenderEngine.src.Entities;
+﻿using OpenTK.Mathematics;
+using VelmoraCraft.src.Entities;
 
-namespace VoxelRenderEngine.src.World
+namespace VelmoraCraft.src.World
 {
     public static class PortalSystem
     {

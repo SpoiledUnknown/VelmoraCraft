@@ -1,6 +1,6 @@
-using System.Buffers;
+﻿using System.Buffers;
 
-namespace VoxelRenderEngine.src.Graphics
+namespace VelmoraCraft.src.Graphics
 {
     public class ChunkMesh : IDisposable
     {

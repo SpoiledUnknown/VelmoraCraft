@@ -1,6 +1,6 @@
 using OpenTK.Graphics.OpenGL;
 
-namespace VoxelRenderEngine.src.Graphics
+namespace VelmoraCraft.src.Graphics
 {
     public class ShaderProgram
     {
@@ -29,7 +29,7 @@ namespace VoxelRenderEngine.src.Graphics
         }
 
         public void Bind() { GL.UseProgram(ID); }
-        public void Delete() {  GL.DeleteShader(ID); }
+        public void Delete() { GL.DeleteProgram(ID); }
 
         private static string LoadShaderSource(string filePath)
         {

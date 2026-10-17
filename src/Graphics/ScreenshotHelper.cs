@@ -1,7 +1,7 @@
-using System.IO.Compression;
+﻿using System.IO.Compression;
 using OpenTK.Graphics.OpenGL;
 
-namespace VoxelRenderEngine.src.Graphics
+namespace VelmoraCraft.src.Graphics
 {
     public static class ScreenshotHelper
     {

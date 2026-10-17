@@ -1,6 +1,6 @@
-using VoxelRenderEngine.src.World;
+﻿using VelmoraCraft.src.World;
 
-namespace VoxelRenderEngine.src.UI
+namespace VelmoraCraft.src.UI
 {
     public struct ItemStack
     {

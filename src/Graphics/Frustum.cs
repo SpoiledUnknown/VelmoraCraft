@@ -1,6 +1,6 @@
-using OpenTK.Mathematics;
+﻿using OpenTK.Mathematics;
 
-namespace VoxelRenderEngine.src.Graphics
+namespace VelmoraCraft.src.Graphics
 {
     /// <summary>
     /// High-performance 3D View Frustum for bounding-box culling.

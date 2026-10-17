@@ -1,7 +1,7 @@
-using OpenTK.Graphics.OpenGL;
+﻿using OpenTK.Graphics.OpenGL;
 using OpenTK.Mathematics;
 
-namespace VoxelRenderEngine.src.UI
+namespace VelmoraCraft.src.UI
 {
     public class FontRenderer
     {

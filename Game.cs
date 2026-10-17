@@ -3,15 +3,15 @@ using OpenTK.Mathematics;
 using OpenTK.Windowing.Common;
 using OpenTK.Windowing.Desktop;
 using OpenTK.Windowing.GraphicsLibraryFramework;
-using VoxelRenderEngine.src;
-using VoxelRenderEngine.src.Audio;
-using VoxelRenderEngine.src.Entities;
-using VoxelRenderEngine.src.Graphics;
-using VoxelRenderEngine.src.Physics;
-using VoxelRenderEngine.src.UI;
-using VoxelRenderEngine.src.World;
+using VelmoraCraft.src;
+using VelmoraCraft.src.Audio;
+using VelmoraCraft.src.Entities;
+using VelmoraCraft.src.Graphics;
+using VelmoraCraft.src.Physics;
+using VelmoraCraft.src.UI;
+using VelmoraCraft.src.World;
 
-namespace VoxelRenderEngine
+namespace VelmoraCraft
 {
     public enum SceneState
     {
@@ -108,6 +108,22 @@ namespace VoxelRenderEngine
 
             // Center The Window
             CenterWindow(new Vector2i(width, height));
+
+            // Set Window Icon
+            try
+            {
+                string iconPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "Textures", "icon.png");
+                if (!File.Exists(iconPath)) iconPath = Path.Combine(Directory.GetCurrentDirectory(), "Textures", "icon.png");
+                if (File.Exists(iconPath))
+                {
+                    StbImageSharp.StbImage.stbi_set_flip_vertically_on_load(0);
+                    using var stream = File.OpenRead(iconPath);
+                    var img = StbImageSharp.ImageResult.FromStream(stream, StbImageSharp.ColorComponents.RedGreenBlueAlpha);
+                    Icon = new OpenTK.Windowing.Common.Input.WindowIcon(new OpenTK.Windowing.Common.Input.Image(img.Width, img.Height, img.Data));
+                    StbImageSharp.StbImage.stbi_set_flip_vertically_on_load(1);
+                }
+            }
+            catch { }
         }
 
         protected override void OnResize(ResizeEventArgs e)
@@ -161,6 +177,30 @@ namespace VoxelRenderEngine
                 }
             };
 
+            uiManager.OnSettingsChanged = () =>
+            {
+                SaveSystem.SaveSettings(new GameSettings
+                {
+                    IsFlying = player?.IsFlying ?? false,
+                    IsFullscreen = WindowState == WindowState.Fullscreen,
+                    IsHudEnabled = uiManager.IsHudEnabled,
+                    RenderDistanceChunks = uiManager.RenderDistanceChunks,
+                    FieldOfView = uiManager.FieldOfView
+                });
+            };
+
+            var savedSettings = SaveSystem.LoadSettings();
+            if (savedSettings != null)
+            {
+                if (savedSettings.IsFullscreen)
+                {
+                    WindowState = WindowState.Fullscreen;
+                }
+                uiManager.IsHudEnabled = savedSettings.IsHudEnabled;
+                uiManager.RenderDistanceChunks = savedSettings.RenderDistanceChunks;
+                uiManager.FieldOfView = savedSettings.FieldOfView;
+            }
+
             // Initialize Victory Screen
             victoryScreen = new VictoryScreen(uiRenderer);
             victoryScreen.OnContinuePlaying = () =>
@@ -190,8 +230,8 @@ namespace VoxelRenderEngine
                 ReturnToMainMenu();
             };
 
-            // Initialize Day/Night Cycle (Minecraft timings: 10m day, 1.5m dusk, 7m night, 1.5m dawn = 20 mins)
-            dayNightCycle = new DayNightCycle(startTimeSeconds: 150.0f);
+            // Initialize Day/Night Cycle (Main Menu starts at Dawn: 45s)
+            dayNightCycle = new DayNightCycle(startTimeSeconds: 45.0f);
             uiManager.DayNightCycle = dayNightCycle;
 
             // Main Menu Setup
@@ -203,6 +243,7 @@ namespace VoxelRenderEngine
             // Create initial scenic 3D world for Main Menu background
             world = new World(seed: 1337, worldChunks: 64);
             world.TranslucentPassUniformLoc = uIsTranslucentPass;
+            world.DayNightCycle = dayNightCycle;
 
             // Scenic orbiting camera looking over the terrain
             int initCenter = world.WorldSizeX / 2;
@@ -213,6 +254,10 @@ namespace VoxelRenderEngine
             Vector3 spawnPos = new Vector3(initCenter + 0.5f, spawnY + 2.5f, initCenter + 0.5f);
             camera = new Camera(width, height, spawnPos);
             player = new Player(spawnPos, camera);
+            if (savedSettings != null)
+            {
+                player.IsFlying = savedSettings.IsFlying;
+            }
             SetupPlayerCallbacks(player);
             uiManager.SetPlayer(player);
             uiManager.SetWorld(world);
@@ -231,6 +276,7 @@ namespace VoxelRenderEngine
             world?.Destroy();
             world = new World(seed, worldSize);
             world.TranslucentPassUniformLoc = uIsTranslucentPass;
+            world.DayNightCycle = dayNightCycle;
 
             chestManager?.Clear();
             totalPlayTime = 0f;
@@ -242,13 +288,21 @@ namespace VoxelRenderEngine
 
             camera = new Camera(width, height, spawnPos);
             player = new Player(spawnPos, camera);
+            var currentSettings = SaveSystem.LoadSettings();
+            if (currentSettings != null)
+            {
+                player.IsFlying = currentSettings.IsFlying;
+            }
             SetupPlayerCallbacks(player);
-
-            // Clean starter inventory for completed game progression
-            player.Inventory.Clear();
 
             uiManager?.SetPlayer(player);
             uiManager?.SetWorld(world);
+
+            if (dayNightCycle != null)
+            {
+                dayNightCycle.TimeOfDay = DayNightCycle.DAWN_DURATION + 60.0f; // Start in daytime
+                dayNightCycle.Update(0f);
+            }
 
             currentScene = SceneState.InGame;
             if (mainMenu != null) mainMenu.HasActiveWorld = true;
@@ -276,29 +330,35 @@ namespace VoxelRenderEngine
         private void SaveCurrentWorld()
         {
             if (world == null || player == null || dayNightCycle == null) return;
-            SaveSystem.SaveWorld(world, player, dayNightCycle, chestManager, totalPlayTime);
+            SaveSystem.SaveWorld(world, player, dayNightCycle, chestManager, totalPlayTime,
+                uiManager: uiManager,
+                isFullscreen: WindowState == WindowState.Fullscreen);
             if (mainMenu != null) mainMenu.HasActiveWorld = true;
         }
 
         private void LoadSavedWorld(SaveData data)
         {
             world?.Destroy();
-            world = new World(data.Seed, data.WorldChunks);
+            int playerChunkX = (int)MathF.Floor(data.PlayerX / Chunk.SIZE_X);
+            int playerChunkZ = (int)MathF.Floor(data.PlayerZ / Chunk.SIZE_Z);
+            world = new World(data.Seed, data.WorldChunks, new Vector2i(playerChunkX, playerChunkZ), data.ModifiedBlocks);
             world.TranslucentPassUniformLoc = uIsTranslucentPass;
+            world.DayNightCycle = dayNightCycle;
 
             chestManager?.Clear();
 
-            float safeY = data.PlayerY + 0.65f;
-            var safePos = new Vector3(data.PlayerX, safeY, data.PlayerZ);
-            camera = new Camera(width, height, safePos + new Vector3(0, 1.62f, 0));
+            var initialPos = new Vector3(data.PlayerX, data.PlayerY, data.PlayerZ);
+            camera = new Camera(width, height, initialPos + new Vector3(0, 1.62f, 0));
             camera.Yaw = data.PlayerYaw;
             camera.Pitch = data.PlayerPitch;
             camera.UpdateVectors();
 
-            player = new Player(safePos, camera);
+            player = new Player(initialPos, camera);
             SetupPlayerCallbacks(player);
 
-            SaveSystem.ApplyLoadedData(data, world, player, dayNightCycle!, chestManager);
+            SaveSystem.ApplyLoadedData(data, world, player, dayNightCycle!, chestManager,
+                uiManager: uiManager,
+                setFullscreen: fs => WindowState = fs ? WindowState.Fullscreen : WindowState.Normal);
             totalPlayTime = data.PlayTimeSeconds;
 
             uiManager?.SetPlayer(player);
@@ -312,6 +372,7 @@ namespace VoxelRenderEngine
         {
             p.ChestManager = chestManager;
             p.AudioManager = audioManager;
+            p.OnFlyToggled = () => uiManager?.OnSettingsChanged?.Invoke();
             p.OnOpenChest = (pos, chestInv) =>
             {
                 uiManager?.OpenChest(pos, chestInv);
@@ -355,7 +416,16 @@ namespace VoxelRenderEngine
         private void ReturnToMainMenu()
         {
             currentScene = SceneState.MainMenu;
-            if (mainMenu != null) mainMenu.HasActiveWorld = (world != null && player != null) || SaveSystem.HasSave();
+            if (dayNightCycle != null)
+            {
+                dayNightCycle.TimeOfDay = 45.0f; // Dawn only
+                dayNightCycle.Update(0f);
+            }
+            if (mainMenu != null)
+            {
+                mainMenu.RandomizeSplash();
+                mainMenu.HasActiveWorld = (world != null && player != null) || SaveSystem.HasSave();
+            }
             CursorState = CursorState.Normal;
         }
 
@@ -406,12 +476,30 @@ namespace VoxelRenderEngine
             currentWaterTint = MathHelper.Lerp(currentWaterTint, targetWater, Math.Clamp(dt * 12.0f, 0f, 1f));
             currentLavaTint = MathHelper.Lerp(currentLavaTint, targetLava, Math.Clamp(dt * 12.0f, 0f, 1f));
 
+            // Compute dynamic distance fog based on current Render Distance slider
+            int viewChunks = (currentScene == SceneState.MainMenu)
+                ? 10
+                : (world?.ViewDistanceChunks ?? uiManager?.RenderDistanceChunks ?? 8);
+            float maxRenderDistance = viewChunks * Chunk.SIZE_X;
+
             // Dynamic atmospheric sky & fog color
             Vector3 baseSkyColor = dayNightCycle?.SkyColor ?? new Vector3(0.68f, 0.82f, 0.95f);
             Vector3 skyColor = baseSkyColor;
             Vector3 fogColor = baseSkyColor;
-            float fogStart = 50.0f;
-            float fogEnd = 140.0f;
+
+            // Fog begins at 65% of max render distance and reaches 100% at the edge of loaded chunks
+            float fogEnd = maxRenderDistance;
+            float fogStart = MathF.Max(8.0f, maxRenderDistance * 0.65f);
+
+            // Adapt camera farPlane to ensure frustum never prematurely clips beyond the fog horizon
+            activeCam.FarPlane = MathF.Max(320.0f, maxRenderDistance + 64.0f);
+
+            // Sync SkyRenderer cloud horizon fade with render distance
+            if (skyRenderer != null)
+            {
+                skyRenderer.CloudFadeStart = fogStart;
+                skyRenderer.CloudFadeEnd = fogEnd * 1.15f;
+            }
 
             if (currentLavaTint > 0.01f)
             {
@@ -650,9 +738,13 @@ namespace VoxelRenderEngine
                     menuCamera.UpdateVectors();
                 }
 
-                // Update world streaming and day/night cycle for moving clouds & light
+                // World streaming and lock day/night cycle to Dawn only
                 world?.Update(menuCamera?.Position ?? new Vector3(512, 70, 512), dt);
-                dayNightCycle?.Update(dt * 0.4f);
+                if (dayNightCycle != null)
+                {
+                    dayNightCycle.TimeOfDay = 45.0f; // Dawn only
+                    dayNightCycle.Update(0f);
+                }
 
                 // Update Main Menu UI
                 mainMenu?.Update(keyboard, mouse, mouse.Position, dt, width, height);

@@ -1,6 +1,6 @@
-# Voxel Render Engine — Architecture & Design Decisions
+# VelmoraCraft — Architecture & Design Decisions
 
-This document outlines key technical decisions made in the Voxel Render Engine, why each approach was chosen, alternative architectures considered, and the optimizations applied to achieve high frame rates with low resource consumption.
+This document outlines key technical decisions made in VelmoraCraft, why each approach was chosen, alternative architectures considered, and the optimizations applied to achieve high frame rates with low resource consumption.
 
 ---
 
@@ -146,5 +146,66 @@ This document outlines key technical decisions made in the Voxel Render Engine, 
     3. **Furnace (Interactive Block)**: Smelting recipes (Iron Ingot, Glass, Stone, Smooth Stone, Bricks, Charcoal, Glowstone) are strictly prohibited from personal inventory and require right-clicking a placed `Furnace` or `LitFurnace`, consuming 1 Coal fuel per operation.
 * **Direct Mineral Compression**:
   * Minerals operate directly between ores/ingots and solid mineral blocks ($9\times\text{ Ore} \leftrightarrow 1\times\text{ Block}$) without needing loose intermediate dust items.
+
+---
+
+## 13. Custom Immediate-Mode UI & Font Renderer Engine
+
+* **Chosen Design**: Dedicated `UIRenderer` and bitmap `FontRenderer` built entirely in OpenGL 3.3 without external dependencies (e.g. Dear ImGui).
+* **Why**:
+  * Eliminates third-party native wrapper DLLs and reduces distribution size.
+  * Allows pixel-accurate retro aesthetics matching classic Minecraft Alpha UI.
+  * Handles dynamic drag-and-drop item stacks, hotbar switching, multi-chest synchronization, furnace smelting progress, and custom tooltips.
+* **Optimization**:
+  * Batching of textured and untextured 2D quads with single-call VBO uploads per frame.
+  * ASCII glyph atlas baked into texture memory with $O(1)$ UV lookups.
+
+---
+
+## 14. Directional Orientation System & Dynamic Door Meshing
+
+* **Chosen Design**: 4-way cardinal metadata orientation (`BlockFacing`: South=0, North=1, West=2, East=3) stored per block and mapped directly into chunk metadata dictionaries.
+* **Why**:
+  * Supports authentic directional placement for Furnaces, Dispensers, Carved Pumpkins, Chests, Rails, Beds, and Doors based on player horizontal look vector (`Camera.Forward`).
+* **Door Mechanics & Dynamic Meshing**:
+  * Wooden and Iron doors occupy a 2-block vertical volume. When placed, both upper and lower blocks inherit the cardinal facing.
+  * `AddDoor` in `ChunkMesher` generates dual-sided quad geometry for each facing:
+    * **Closed**: Aligned with the doorframe, recessed slightly into the block along the facing axis.
+    * **Open**: Rotated 90° inward against the adjoining wall frame.
+  * Player interaction or Redstone signals (`RedstoneSystem.ToggleDoor`) flip the open/closed state while strictly preserving the door's facing metadata.
+  * Shift + Right Click allows instant in-place rotation cycling through all 4 orientations.
+
+---
+
+## 15. World Persistence, Options & Instant Block Restoration (`SaveSystem`)
+
+* **Chosen Design**: JSON-based dual-tier persistence: global `saves/options.json` for engine settings, and world-specific save files storing player stats, inventories, modified blocks, metadata, and active simulation timers.
+* **Why**:
+  * **Global Settings**: Options adjusted in the pause menu (Flight, Fullscreen, HUD, Render Distance slider, FOV slider) immediately write to `options.json` and persist across application restarts.
+  * **Immediate Block Visibility**: `World` pre-populates modified blocks into chunk generation maps before meshing, and `ApplyLoadedData` enqueues all modified chunk coordinates so player modifications appear on screen instantly without requiring player interaction.
+* **Optimization**:
+  * Delta serialization: only user-modified or broken blocks are serialized, keeping save file sizes tiny ($< 100\text{ KB}$).
+
+---
+
+## 16. Living Ecosystem Simulations: Dirt-to-Grass & Nocturnal Spawning
+
+* **Chosen Design**: Lightweight time-based simulation loops running on the main thread throttled to low-frequency ticks.
+* **Dirt-to-Grass Spread**:
+  * Placing dirt near grass blocks with transparent air overhead registers a countdown timer lasting 1.0 to 2.0 in-game days (1 day = 20 minutes = 1200 seconds).
+  * Timers persist across game sessions via `SaveData.PendingDirtSpreads`.
+* **Nocturnal Cobweb Spawning**:
+  * During Dusk and Night phases, trees in loaded chunks near the player periodically spawn cobwebs (`BlockType.Cobweb`) underneath leaf canopies.
+  * Density checks prevent clustering (maximum 2 webs per 5x5 area), providing natural atmospheric spiderwebs and renewable resources for wool and bed crafting.
+
+---
+
+## 17. Scene Architecture & Main Menu Orbit
+
+* **Chosen Design**: Explicit scene state machine (`SceneState`: `MainMenu`, `InGame`, `VictoryScreen`).
+* **Why**:
+  * Decouples menu camera logic, UI input handling, and game world lifecycle.
+  * **Main Menu**: Generates a live scenic 3D world with an orbiting camera, dawn atmosphere, randomized retro splash taglines, and background ambient soundtrack selection.
+  * **Victory Screen**: Triggers upon stepping through the Nether Portal, breaking nearby portals to prevent reload loops and offering seamless return to main menu or continued free play.
 
 

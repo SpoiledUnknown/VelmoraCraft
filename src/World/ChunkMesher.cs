@@ -1,8 +1,8 @@
 using OpenTK.Mathematics;
-using VoxelRenderEngine.src.Graphics;
-using VoxelRenderEngine.src.UI;
+using VelmoraCraft.src.Graphics;
+using VelmoraCraft.src.UI;
 
-namespace VoxelRenderEngine.src.World
+namespace VelmoraCraft.src.World
 {
     public class ChunkMeshBuilder
     {
@@ -14,14 +14,39 @@ namespace VoxelRenderEngine.src.World
         public void AddQuad(
             Vector3 p0, Vector3 p1, Vector3 p2, Vector3 p3,
             float u0, float v0, float u1, float v1,
-            Vector3 tint, Vector3 normal)
+            Vector3 tint, Vector3 normal,
+            float swayTop = 0f, float swayBottom = 0f)
         {
             uint b = VertexOffset;
 
-            Vertices.Add(new ChunkVertex(p0.X, p0.Y, p0.Z, u0, v1, tint.X, tint.Y, tint.Z, normal.X, normal.Y, normal.Z));
-            Vertices.Add(new ChunkVertex(p1.X, p1.Y, p1.Z, u1, v1, tint.X, tint.Y, tint.Z, normal.X, normal.Y, normal.Z));
-            Vertices.Add(new ChunkVertex(p2.X, p2.Y, p2.Z, u1, v0, tint.X, tint.Y, tint.Z, normal.X, normal.Y, normal.Z));
-            Vertices.Add(new ChunkVertex(p3.X, p3.Y, p3.Z, u0, v0, tint.X, tint.Y, tint.Z, normal.X, normal.Y, normal.Z));
+            Vertices.Add(new ChunkVertex(p0.X, p0.Y, p0.Z, u0, v1, tint.X, tint.Y, tint.Z, normal.X, normal.Y, normal.Z, swayTop));
+            Vertices.Add(new ChunkVertex(p1.X, p1.Y, p1.Z, u1, v1, tint.X, tint.Y, tint.Z, normal.X, normal.Y, normal.Z, swayTop));
+            Vertices.Add(new ChunkVertex(p2.X, p2.Y, p2.Z, u1, v0, tint.X, tint.Y, tint.Z, normal.X, normal.Y, normal.Z, swayBottom));
+            Vertices.Add(new ChunkVertex(p3.X, p3.Y, p3.Z, u0, v0, tint.X, tint.Y, tint.Z, normal.X, normal.Y, normal.Z, swayBottom));
+
+            Indices.Add(b + 0);
+            Indices.Add(b + 1);
+            Indices.Add(b + 2);
+            Indices.Add(b + 2);
+            Indices.Add(b + 3);
+            Indices.Add(b + 0);
+
+            VertexOffset += 4;
+        }
+
+        [System.Runtime.CompilerServices.MethodImpl(System.Runtime.CompilerServices.MethodImplOptions.AggressiveInlining)]
+        public void AddQuadCustomUV(
+            Vector3 p0, Vector3 p1, Vector3 p2, Vector3 p3,
+            Vector2 uv0, Vector2 uv1, Vector2 uv2, Vector2 uv3,
+            Vector3 tint, Vector3 normal,
+            float swayTop = 0f, float swayBottom = 0f)
+        {
+            uint b = VertexOffset;
+
+            Vertices.Add(new ChunkVertex(p0.X, p0.Y, p0.Z, uv0.X, uv0.Y, tint.X, tint.Y, tint.Z, normal.X, normal.Y, normal.Z, swayTop));
+            Vertices.Add(new ChunkVertex(p1.X, p1.Y, p1.Z, uv1.X, uv1.Y, tint.X, tint.Y, tint.Z, normal.X, normal.Y, normal.Z, swayTop));
+            Vertices.Add(new ChunkVertex(p2.X, p2.Y, p2.Z, uv2.X, uv2.Y, tint.X, tint.Y, tint.Z, normal.X, normal.Y, normal.Z, swayBottom));
+            Vertices.Add(new ChunkVertex(p3.X, p3.Y, p3.Z, uv3.X, uv3.Y, tint.X, tint.Y, tint.Z, normal.X, normal.Y, normal.Z, swayBottom));
 
             Indices.Add(b + 0);
             Indices.Add(b + 1);
@@ -217,11 +242,13 @@ namespace VoxelRenderEngine.src.World
             }
             else if (blockDef.MeshType == MeshType.DoorClosed)
             {
-                AddDoor(bx, by, bz, blockDef, false, builder);
+                byte facing = chunk.GetMetadata(x, y, z);
+                AddDoor(bx, by, bz, blockDef, false, facing, builder);
             }
             else if (blockDef.MeshType == MeshType.DoorOpen)
             {
-                AddDoor(bx, by, bz, blockDef, true, builder);
+                byte facing = chunk.GetMetadata(x, y, z);
+                AddDoor(bx, by, bz, blockDef, true, facing, builder);
             }
             else if (blockDef.MeshType == MeshType.SwitchLever)
             {
@@ -533,7 +560,8 @@ namespace VoxelRenderEngine.src.World
             byte facing = 0)
         {
             Face texFace = GetOrientedTextureFace(face, facing);
-            AddFaceWithUV(face, x, y, z, def.GetFaceAtlasCoord(texFace), def.TintColor, builder);
+            float sway = (def.Type == BlockType.Leaves || def.Type == BlockType.SpruceLeaves) ? 2.0f : 0.0f;
+            AddFaceWithUV(face, x, y, z, def.GetFaceAtlasCoord(texFace), def.TintColor, builder, sway);
         }
 
         private static Face GetOrientedTextureFace(Face meshFace, byte facing)
@@ -578,7 +606,8 @@ namespace VoxelRenderEngine.src.World
             float z,
             Vector2 atlasCoord,
             Vector3 tint,
-            ChunkMeshBuilder builder)
+            ChunkMeshBuilder builder,
+            float sway = 0f)
         {
             Vector3 normal = face switch
             {
@@ -649,7 +678,7 @@ namespace VoxelRenderEngine.src.World
             float v0 = 1.0f - ((atlasCoord.Y + 1f) / ATLAS_SIZE); // bottom of tile
             float v1 = 1.0f - (atlasCoord.Y / ATLAS_SIZE);        // top of tile
 
-            builder.AddQuad(pos0, pos1, pos2, pos3, u0, v0, u1, v1, tint, normal);
+            builder.AddQuad(pos0, pos1, pos2, pos3, u0, v0, u1, v1, tint, normal, sway, sway);
         }
 
         private static void AddDoubleSidedQuad(
@@ -657,7 +686,8 @@ namespace VoxelRenderEngine.src.World
             Vector2 atlasCoord,
             Vector3 tint,
             Vector3 normal,
-            ChunkMeshBuilder builder)
+            ChunkMeshBuilder builder,
+            float swayTop = 0f, float swayBottom = 0f)
         {
             float u0 = atlasCoord.X / ATLAS_SIZE;
             float u1 = (atlasCoord.X + 1f) / ATLAS_SIZE;
@@ -665,10 +695,10 @@ namespace VoxelRenderEngine.src.World
             float b1 = 1.0f - (atlasCoord.Y / ATLAS_SIZE);
 
             // Front side (CW winding)
-            builder.AddQuad(v0, v1, v2, v3, u0, b0, u1, b1, tint, normal);
+            builder.AddQuad(v0, v1, v2, v3, u0, b0, u1, b1, tint, normal, swayTop, swayBottom);
 
             // Back side (reversed winding so visible from both sides)
-            builder.AddQuad(v1, v0, v3, v2, u1, b0, u0, b1, tint, -normal);
+            builder.AddQuad(v1, v0, v3, v2, u1, b0, u0, b1, tint, -normal, swayTop, swayBottom);
         }
 
         private static void AddCrossQuad(
@@ -676,8 +706,28 @@ namespace VoxelRenderEngine.src.World
             ChunkMeshBuilder builder)
         {
             Vector2 uv = def.GetFaceAtlasCoord(Face.Front);
+
+            // Natural grass variation between (13, 5) and (12, 5)
+            if (def.Type == BlockType.TallGrass)
+            {
+                int variant = (((int)MathF.Floor(bx)) ^ ((int)MathF.Floor(bz))) & 1;
+                uv = (variant == 0) ? new Vector2(13, 5) : new Vector2(12, 5);
+            }
+
             Vector3 tint = def.IsLightSource ? new Vector3(1.35f, 1.25f, 1.10f) : def.TintColor;
             float r = 0.35f;
+
+            bool isSwayingPlant = (def.Type == BlockType.TallGrass ||
+                                   def.Type == BlockType.Rose ||
+                                   def.Type == BlockType.Dandelion ||
+                                   def.Type == BlockType.RedMushroom ||
+                                   def.Type == BlockType.BrownMushroom ||
+                                   def.Type == BlockType.SugarCane ||
+                                   def.Type == BlockType.OakSapling ||
+                                   def.Type == BlockType.Wheat);
+
+            float swayTop = isSwayingPlant ? 1.0f : 0.0f;
+            float swayBottom = 0.0f;
 
             // Diagonal 1
             AddDoubleSidedQuad(
@@ -686,7 +736,7 @@ namespace VoxelRenderEngine.src.World
                 new Vector3(bx + r, by - 0.5f,  bz + r),
                 new Vector3(bx - r, by - 0.5f,  bz - r),
                 uv, tint, new Vector3(-0.7f, 0, 0.7f),
-                builder
+                builder, swayTop, swayBottom
             );
 
             // Diagonal 2
@@ -696,7 +746,7 @@ namespace VoxelRenderEngine.src.World
                 new Vector3(bx + r, by - 0.5f,  bz - r),
                 new Vector3(bx - r, by - 0.5f,  bz + r),
                 uv, tint, new Vector3(0.7f, 0, 0.7f),
-                builder
+                builder, swayTop, swayBottom
             );
         }
 
@@ -704,11 +754,14 @@ namespace VoxelRenderEngine.src.World
             float bx, float by, float bz, BlockDefinition def, byte stage,
             ChunkMeshBuilder builder)
         {
-            // Textures from (7, 5) to (15, 5), with 15,5 being complete wheat and 7,5 being seeds
-            int col = (stage >= 7) ? 15 : (7 + Math.Clamp((int)stage, 0, 6));
+            // Textures from (8, 5) [stage 0 seeds] to (15, 5) [stage 7 mature wheat]
+            int col = 8 + Math.Clamp((int)stage, 0, 7);
             Vector2 uv = new Vector2(col, 5);
             Vector3 tint = def.TintColor;
             float r = 0.35f;
+
+            float swayTop = 1.0f;
+            float swayBottom = 0.0f;
 
             // Diagonal 1
             AddDoubleSidedQuad(
@@ -717,7 +770,7 @@ namespace VoxelRenderEngine.src.World
                 new Vector3(bx + r, by - 0.5f,  bz + r),
                 new Vector3(bx - r, by - 0.5f,  bz - r),
                 uv, tint, new Vector3(-0.7f, 0, 0.7f),
-                builder
+                builder, swayTop, swayBottom
             );
 
             // Diagonal 2
@@ -727,7 +780,7 @@ namespace VoxelRenderEngine.src.World
                 new Vector3(bx + r, by - 0.5f,  bz - r),
                 new Vector3(bx - r, by - 0.5f,  bz + r),
                 uv, tint, new Vector3(0.7f, 0, 0.7f),
-                builder
+                builder, swayTop, swayBottom
             );
         }
 
@@ -802,37 +855,133 @@ namespace VoxelRenderEngine.src.World
         }
 
         private static void AddDoor(
-            float bx, float by, float bz, BlockDefinition def, bool isOpen,
+            float bx, float by, float bz, BlockDefinition def, bool isOpen, byte facing,
             ChunkMeshBuilder builder)
         {
             Vector2 uv = def.GetFaceAtlasCoord(Face.Front);
             Vector3 tint = def.TintColor;
 
+            // Facing:
+            // 0 = South (Faces +Z): door lies along X (z = bz - 0.42f, norm +Z)
+            // 1 = North (Faces -Z): door lies along X (z = bz + 0.42f, norm -Z)
+            // 2 = West  (Faces -X): door lies along Z (x = bx + 0.42f, norm -X)
+            // 3 = East  (Faces +X): door lies along Z (x = bx - 0.42f, norm +X)
             if (!isOpen)
             {
-                // Closed door: aligned with Z edge
-                float z = bz - 0.42f;
-                AddDoubleSidedQuad(
-                    new Vector3(bx - 0.5f, by + 0.5f, z),
-                    new Vector3(bx + 0.5f, by + 0.5f, z),
-                    new Vector3(bx + 0.5f, by - 0.5f, z),
-                    new Vector3(bx - 0.5f, by - 0.5f, z),
-                    uv, tint, new Vector3(0, 0, 1),
-                    builder
-                );
+                switch (facing)
+                {
+                    case (byte)BlockFacing.North: // 1: Faces -Z
+                    {
+                        float z = bz + 0.42f;
+                        AddDoubleSidedQuad(
+                            new Vector3(bx + 0.5f, by + 0.5f, z),
+                            new Vector3(bx - 0.5f, by + 0.5f, z),
+                            new Vector3(bx - 0.5f, by - 0.5f, z),
+                            new Vector3(bx + 0.5f, by - 0.5f, z),
+                            uv, tint, new Vector3(0, 0, -1),
+                            builder
+                        );
+                        break;
+                    }
+                    case (byte)BlockFacing.West: // 2: Faces -X
+                    {
+                        float x = bx + 0.42f;
+                        AddDoubleSidedQuad(
+                            new Vector3(x, by + 0.5f, bz - 0.5f),
+                            new Vector3(x, by + 0.5f, bz + 0.5f),
+                            new Vector3(x, by - 0.5f, bz + 0.5f),
+                            new Vector3(x, by - 0.5f, bz - 0.5f),
+                            uv, tint, new Vector3(-1, 0, 0),
+                            builder
+                        );
+                        break;
+                    }
+                    case (byte)BlockFacing.East: // 3: Faces +X
+                    {
+                        float x = bx - 0.42f;
+                        AddDoubleSidedQuad(
+                            new Vector3(x, by + 0.5f, bz + 0.5f),
+                            new Vector3(x, by + 0.5f, bz - 0.5f),
+                            new Vector3(x, by - 0.5f, bz - 0.5f),
+                            new Vector3(x, by - 0.5f, bz + 0.5f),
+                            uv, tint, new Vector3(1, 0, 0),
+                            builder
+                        );
+                        break;
+                    }
+                    default: // South (0): Faces +Z
+                    {
+                        float z = bz - 0.42f;
+                        AddDoubleSidedQuad(
+                            new Vector3(bx - 0.5f, by + 0.5f, z),
+                            new Vector3(bx + 0.5f, by + 0.5f, z),
+                            new Vector3(bx + 0.5f, by - 0.5f, z),
+                            new Vector3(bx - 0.5f, by - 0.5f, z),
+                            uv, tint, new Vector3(0, 0, 1),
+                            builder
+                        );
+                        break;
+                    }
+                }
             }
             else
             {
-                // Open door: rotated 90 degrees along X edge
-                float x = bx - 0.42f;
-                AddDoubleSidedQuad(
-                    new Vector3(x, by + 0.5f, bz - 0.5f),
-                    new Vector3(x, by + 0.5f, bz + 0.5f),
-                    new Vector3(x, by - 0.5f, bz + 0.5f),
-                    new Vector3(x, by - 0.5f, bz - 0.5f),
-                    uv, tint, new Vector3(1, 0, 0),
-                    builder
-                );
+                // Open door swings 90 degrees inward against the adjacent wall frame:
+                switch (facing)
+                {
+                    case (byte)BlockFacing.North: // 1
+                    {
+                        float x = bx + 0.42f;
+                        AddDoubleSidedQuad(
+                            new Vector3(x, by + 0.5f, bz + 0.5f),
+                            new Vector3(x, by + 0.5f, bz - 0.5f),
+                            new Vector3(x, by - 0.5f, bz - 0.5f),
+                            new Vector3(x, by - 0.5f, bz + 0.5f),
+                            uv, tint, new Vector3(-1, 0, 0),
+                            builder
+                        );
+                        break;
+                    }
+                    case (byte)BlockFacing.West: // 2
+                    {
+                        float z = bz - 0.42f;
+                        AddDoubleSidedQuad(
+                            new Vector3(bx + 0.5f, by + 0.5f, z),
+                            new Vector3(bx - 0.5f, by + 0.5f, z),
+                            new Vector3(bx - 0.5f, by - 0.5f, z),
+                            new Vector3(bx + 0.5f, by - 0.5f, z),
+                            uv, tint, new Vector3(0, 0, 1),
+                            builder
+                        );
+                        break;
+                    }
+                    case (byte)BlockFacing.East: // 3
+                    {
+                        float z = bz + 0.42f;
+                        AddDoubleSidedQuad(
+                            new Vector3(bx - 0.5f, by + 0.5f, z),
+                            new Vector3(bx + 0.5f, by + 0.5f, z),
+                            new Vector3(bx + 0.5f, by - 0.5f, z),
+                            new Vector3(bx - 0.5f, by - 0.5f, z),
+                            uv, tint, new Vector3(0, 0, -1),
+                            builder
+                        );
+                        break;
+                    }
+                    default: // South (0)
+                    {
+                        float x = bx - 0.42f;
+                        AddDoubleSidedQuad(
+                            new Vector3(x, by + 0.5f, bz - 0.5f),
+                            new Vector3(x, by + 0.5f, bz + 0.5f),
+                            new Vector3(x, by - 0.5f, bz + 0.5f),
+                            new Vector3(x, by - 0.5f, bz - 0.5f),
+                            uv, tint, new Vector3(1, 0, 0),
+                            builder
+                        );
+                        break;
+                    }
+                }
             }
         }
 
@@ -893,58 +1042,254 @@ namespace VoxelRenderEngine.src.World
             float z1 = bz + 0.5f;
 
             bool isHead = (def.Type == BlockType.BedHead);
-            Vector2 topUV = isHead ? new Vector2(7, 8) : new Vector2(6, 8);
-            Vector2 endUV = isHead ? new Vector2(5, 9) : new Vector2(6, 9);
-            Vector2 sideUV = isHead ? new Vector2(7, 9) : new Vector2(8, 9);
-            Vector2 bottomUV = new Vector2(4, 0); // Wooden planks bottom
+            Vector2 topCoord = isHead ? new Vector2(7, 8) : new Vector2(6, 8);
+            Vector2 sideCoord = isHead ? new Vector2(7, 9) : new Vector2(6, 9);
+            Vector2 endCoord = isHead ? new Vector2(8, 9) : new Vector2(5, 9);
+            Vector2 bottomCoord = new Vector2(4, 0); // Wooden planks bottom
             Vector3 tint = def.TintColor;
 
             // 1. Top face (+Y)
-            AddBoxFaceWithUV(new Vector3(x0, y1, z0), new Vector3(x1, y1, z0), new Vector3(x1, y1, z1), new Vector3(x0, y1, z1), topUV, tint, Vector3.UnitY, builder);
+            AddBedTopFace(x0, x1, y1, z0, z1, topCoord, tint, facing, builder);
 
             // 2. Bottom face (-Y)
-            AddBoxFaceWithUV(new Vector3(x0, y0, z1), new Vector3(x1, y0, z1), new Vector3(x1, y0, z0), new Vector3(x0, y0, z0), bottomUV, tint, -Vector3.UnitY, builder);
+            float bu0 = bottomCoord.X / ATLAS_SIZE;
+            float bu1 = (bottomCoord.X + 1f) / ATLAS_SIZE;
+            float bv0 = 1.0f - ((bottomCoord.Y + 1f) / ATLAS_SIZE);
+            float bv1 = 1.0f - (bottomCoord.Y / ATLAS_SIZE);
+            builder.AddQuad(
+                new Vector3(x0, y0, z1),
+                new Vector3(x1, y0, z1),
+                new Vector3(x1, y0, z0),
+                new Vector3(x0, y0, z0),
+                bu0, bv0, bu1, bv1, tint, -Vector3.UnitY);
 
-            // 3. Side & End faces based on facing
+            // UV coordinates for side and end textures (9/16 height clipped)
+            float su0 = sideCoord.X / ATLAS_SIZE;
+            float su1 = (sideCoord.X + 1f) / ATLAS_SIZE;
+            float sv1 = 1.0f - (sideCoord.Y / ATLAS_SIZE);
+            float sv0 = sv1 - (9f / 16f) / ATLAS_SIZE;
+
+            float eu0 = endCoord.X / ATLAS_SIZE;
+            float eu1 = (endCoord.X + 1f) / ATLAS_SIZE;
+            float ev1 = 1.0f - (endCoord.Y / ATLAS_SIZE);
+            float ev0 = ev1 - (9f / 16f) / ATLAS_SIZE;
+
+            // Clockwise positions for each side/end face:
+            Vector3 front0 = new Vector3(x0, y1, z1);
+            Vector3 front1 = new Vector3(x1, y1, z1);
+            Vector3 front2 = new Vector3(x1, y0, z1);
+            Vector3 front3 = new Vector3(x0, y0, z1);
+
+            Vector3 back0 = new Vector3(x1, y1, z0);
+            Vector3 back1 = new Vector3(x0, y1, z0);
+            Vector3 back2 = new Vector3(x0, y0, z0);
+            Vector3 back3 = new Vector3(x1, y0, z0);
+
+            Vector3 left0 = new Vector3(x0, y1, z0);
+            Vector3 left1 = new Vector3(x0, y1, z1);
+            Vector3 left2 = new Vector3(x0, y0, z1);
+            Vector3 left3 = new Vector3(x0, y0, z0);
+
+            Vector3 right0 = new Vector3(x1, y1, z1);
+            Vector3 right1 = new Vector3(x1, y1, z0);
+            Vector3 right2 = new Vector3(x1, y0, z0);
+            Vector3 right3 = new Vector3(x1, y0, z1);
+
+            // 3. Side & End faces based on facing:
             // facing: 0 = South (+Z), 1 = North (-Z), 2 = West (-X), 3 = East (+X)
-            if (facing == 2 || facing == 3) // Facing along X
+            if (facing == 0) // South: Head is +Z, Foot is -Z
             {
-                // North (-Z) & South (+Z) are side faces
-                AddBoxFaceWithUV(new Vector3(x0, y1, z1), new Vector3(x1, y1, z1), new Vector3(x1, y0, z1), new Vector3(x0, y0, z1), sideUV, tint, Vector3.UnitZ, builder);
-                AddBoxFaceWithUV(new Vector3(x1, y1, z0), new Vector3(x0, y1, z0), new Vector3(x0, y0, z0), new Vector3(x1, y0, z0), sideUV, tint, -Vector3.UnitZ, builder);
+                // West (-X, Left): Foot is -Z (left0/left3) -> su0, Head is +Z (left1/left2) -> su1
+                builder.AddQuadCustomUV(
+                    left0, left1, left2, left3,
+                    new Vector2(su0, sv1), new Vector2(su1, sv1),
+                    new Vector2(su1, sv0), new Vector2(su0, sv0),
+                    tint, -Vector3.UnitX);
 
-                // Ends: West (-X) and East (+X)
-                Vector2 westUV = (facing == 2) ? (!isHead ? endUV : sideUV) : (isHead ? endUV : sideUV);
-                Vector2 eastUV = (facing == 3) ? (!isHead ? endUV : sideUV) : (isHead ? endUV : sideUV);
+                // East (+X, Right): Head is +Z (right0/right3) -> su1, Foot is -Z (right1/right2) -> su0
+                builder.AddQuadCustomUV(
+                    right0, right1, right2, right3,
+                    new Vector2(su1, sv1), new Vector2(su0, sv1),
+                    new Vector2(su0, sv0), new Vector2(su1, sv0),
+                    tint, Vector3.UnitX);
 
-                AddBoxFaceWithUV(new Vector3(x0, y1, z0), new Vector3(x0, y1, z1), new Vector3(x0, y0, z1), new Vector3(x0, y0, z0), westUV, tint, -Vector3.UnitX, builder);
-                AddBoxFaceWithUV(new Vector3(x1, y1, z1), new Vector3(x1, y1, z0), new Vector3(x1, y0, z0), new Vector3(x1, y0, z1), eastUV, tint, Vector3.UnitX, builder);
+                // Outer End:
+                // BedFoot outer end is North (-Z, Back)
+                if (!isHead)
+                {
+                    builder.AddQuadCustomUV(
+                        back0, back1, back2, back3,
+                        new Vector2(eu0, ev1), new Vector2(eu1, ev1),
+                        new Vector2(eu1, ev0), new Vector2(eu0, ev0),
+                        tint, -Vector3.UnitZ);
+                }
+                // BedHead outer end is South (+Z, Front)
+                else
+                {
+                    builder.AddQuadCustomUV(
+                        front0, front1, front2, front3,
+                        new Vector2(eu0, ev1), new Vector2(eu1, ev1),
+                        new Vector2(eu1, ev0), new Vector2(eu0, ev0),
+                        tint, Vector3.UnitZ);
+                }
             }
-            else // Default facing along Z (0 = South, 1 = North)
+            else if (facing == 1) // North: Head is -Z, Foot is +Z
             {
-                // West (-X) & East (+X) are side faces
-                AddBoxFaceWithUV(new Vector3(x0, y1, z0), new Vector3(x0, y1, z1), new Vector3(x0, y0, z1), new Vector3(x0, y0, z0), sideUV, tint, -Vector3.UnitX, builder);
-                AddBoxFaceWithUV(new Vector3(x1, y1, z1), new Vector3(x1, y1, z0), new Vector3(x1, y0, z0), new Vector3(x1, y0, z1), sideUV, tint, Vector3.UnitX, builder);
+                // West (-X, Left): Head is -Z (left0/left3) -> su1, Foot is +Z (left1/left2) -> su0
+                builder.AddQuadCustomUV(
+                    left0, left1, left2, left3,
+                    new Vector2(su1, sv1), new Vector2(su0, sv1),
+                    new Vector2(su0, sv0), new Vector2(su1, sv0),
+                    tint, -Vector3.UnitX);
 
-                // Ends: North (-Z) and South (+Z)
-                Vector2 northUV = (facing == 1) ? (!isHead ? endUV : sideUV) : (isHead ? endUV : sideUV);
-                Vector2 southUV = (facing == 0) ? (!isHead ? endUV : sideUV) : (isHead ? endUV : sideUV);
+                // East (+X, Right): Foot is +Z (right0/right3) -> su0, Head is -Z (right1/right2) -> su1
+                builder.AddQuadCustomUV(
+                    right0, right1, right2, right3,
+                    new Vector2(su0, sv1), new Vector2(su1, sv1),
+                    new Vector2(su1, sv0), new Vector2(su0, sv0),
+                    tint, Vector3.UnitX);
 
-                AddBoxFaceWithUV(new Vector3(x1, y1, z0), new Vector3(x0, y1, z0), new Vector3(x0, y0, z0), new Vector3(x1, y0, z0), northUV, tint, -Vector3.UnitZ, builder);
-                AddBoxFaceWithUV(new Vector3(x0, y1, z1), new Vector3(x1, y1, z1), new Vector3(x1, y0, z1), new Vector3(x0, y0, z1), southUV, tint, Vector3.UnitZ, builder);
+                // Outer End:
+                // BedFoot outer end is South (+Z, Front)
+                if (!isHead)
+                {
+                    builder.AddQuadCustomUV(
+                        front0, front1, front2, front3,
+                        new Vector2(eu0, ev1), new Vector2(eu1, ev1),
+                        new Vector2(eu1, ev0), new Vector2(eu0, ev0),
+                        tint, Vector3.UnitZ);
+                }
+                // BedHead outer end is North (-Z, Back)
+                else
+                {
+                    builder.AddQuadCustomUV(
+                        back0, back1, back2, back3,
+                        new Vector2(eu0, ev1), new Vector2(eu1, ev1),
+                        new Vector2(eu1, ev0), new Vector2(eu0, ev0),
+                        tint, -Vector3.UnitZ);
+                }
+            }
+            else if (facing == 2) // West: Head is -X, Foot is +X
+            {
+                // North (-Z, Back): Foot is +X (back0/back3) -> su0, Head is -X (back1/back2) -> su1
+                builder.AddQuadCustomUV(
+                    back0, back1, back2, back3,
+                    new Vector2(su0, sv1), new Vector2(su1, sv1),
+                    new Vector2(su1, sv0), new Vector2(su0, sv0),
+                    tint, -Vector3.UnitZ);
+
+                // South (+Z, Front): Head is -X (front0/front3) -> su1, Foot is +X (front1/front2) -> su0
+                builder.AddQuadCustomUV(
+                    front0, front1, front2, front3,
+                    new Vector2(su1, sv1), new Vector2(su0, sv1),
+                    new Vector2(su0, sv0), new Vector2(su1, sv0),
+                    tint, Vector3.UnitZ);
+
+                // Outer End:
+                // BedFoot outer end is East (+X, Right)
+                if (!isHead)
+                {
+                    builder.AddQuadCustomUV(
+                        right0, right1, right2, right3,
+                        new Vector2(eu0, ev1), new Vector2(eu1, ev1),
+                        new Vector2(eu1, ev0), new Vector2(eu0, ev0),
+                        tint, Vector3.UnitX);
+                }
+                // BedHead outer end is West (-X, Left)
+                else
+                {
+                    builder.AddQuadCustomUV(
+                        left0, left1, left2, left3,
+                        new Vector2(eu0, ev1), new Vector2(eu1, ev1),
+                        new Vector2(eu1, ev0), new Vector2(eu0, ev0),
+                        tint, -Vector3.UnitX);
+                }
+            }
+            else // facing == 3 (East: Head is +X, Foot is -X)
+            {
+                // North (-Z, Back): Head is +X (back0/back3) -> su1, Foot is -X (back1/back2) -> su0
+                builder.AddQuadCustomUV(
+                    back0, back1, back2, back3,
+                    new Vector2(su1, sv1), new Vector2(su0, sv1),
+                    new Vector2(su0, sv0), new Vector2(su1, sv0),
+                    tint, -Vector3.UnitZ);
+
+                // South (+Z, Front): Foot is -X (front0/front3) -> su0, Head is +X (front1/front2) -> su1
+                builder.AddQuadCustomUV(
+                    front0, front1, front2, front3,
+                    new Vector2(su0, sv1), new Vector2(su1, sv1),
+                    new Vector2(su1, sv0), new Vector2(su0, sv0),
+                    tint, Vector3.UnitZ);
+
+                // Outer End:
+                // BedFoot outer end is West (-X, Left)
+                if (!isHead)
+                {
+                    builder.AddQuadCustomUV(
+                        left0, left1, left2, left3,
+                        new Vector2(eu0, ev1), new Vector2(eu1, ev1),
+                        new Vector2(eu1, ev0), new Vector2(eu0, ev0),
+                        tint, -Vector3.UnitX);
+                }
+                // BedHead outer end is East (+X, Right)
+                else
+                {
+                    builder.AddQuadCustomUV(
+                        right0, right1, right2, right3,
+                        new Vector2(eu0, ev1), new Vector2(eu1, ev1),
+                        new Vector2(eu1, ev0), new Vector2(eu0, ev0),
+                        tint, Vector3.UnitX);
+                }
             }
         }
 
-        private static void AddBoxFaceWithUV(
-            Vector3 pos0, Vector3 pos1, Vector3 pos2, Vector3 pos3,
-            Vector2 atlasCoord, Vector3 tint, Vector3 normal,
+        private static void AddBedTopFace(
+            float x0, float x1, float y1, float z0, float z1,
+            Vector2 atlasCoord, Vector3 tint, byte facing,
             ChunkMeshBuilder builder)
         {
             float u0 = atlasCoord.X / ATLAS_SIZE;
             float u1 = (atlasCoord.X + 1f) / ATLAS_SIZE;
             float v0 = 1.0f - ((atlasCoord.Y + 1f) / ATLAS_SIZE);
             float v1 = 1.0f - (atlasCoord.Y / ATLAS_SIZE);
-            builder.AddQuad(pos0, pos1, pos2, pos3, u0, v0, u1, v1, tint, normal);
+
+            Vector3 p0 = new Vector3(x0, y1, z0); // NW
+            Vector3 p1 = new Vector3(x1, y1, z0); // NE
+            Vector3 p2 = new Vector3(x1, y1, z1); // SE
+            Vector3 p3 = new Vector3(x0, y1, z1); // SW
+
+            Vector2 uv0, uv1, uv2, uv3;
+
+            if (facing == 0) // South (+Z is head): u1 towards +Z, u0 towards -Z
+            {
+                uv0 = new Vector2(u0, v1);
+                uv1 = new Vector2(u0, v0);
+                uv2 = new Vector2(u1, v0);
+                uv3 = new Vector2(u1, v1);
+            }
+            else if (facing == 1) // North (-Z is head): u1 towards -Z, u0 towards +Z
+            {
+                uv0 = new Vector2(u1, v0);
+                uv1 = new Vector2(u1, v1);
+                uv2 = new Vector2(u0, v1);
+                uv3 = new Vector2(u0, v0);
+            }
+            else if (facing == 2) // West (-X is head): u1 towards -X, u0 towards +X
+            {
+                uv0 = new Vector2(u1, v1);
+                uv1 = new Vector2(u0, v1);
+                uv2 = new Vector2(u0, v0);
+                uv3 = new Vector2(u1, v0);
+            }
+            else // East (+X is head): u1 towards +X, u0 towards -X
+            {
+                uv0 = new Vector2(u0, v0);
+                uv1 = new Vector2(u1, v0);
+                uv2 = new Vector2(u1, v1);
+                uv3 = new Vector2(u0, v1);
+            }
+
+            builder.AddQuadCustomUV(p0, p1, p2, p3, uv0, uv1, uv2, uv3, tint, Vector3.UnitY);
         }
     }
 }

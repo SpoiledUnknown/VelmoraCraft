@@ -1,9 +1,9 @@
 using OpenTK.Mathematics;
 using OpenTK.Windowing.GraphicsLibraryFramework;
-using VoxelRenderEngine.src.Entities;
-using VoxelRenderEngine.src.World;
+using VelmoraCraft.src.Entities;
+using VelmoraCraft.src.World;
 
-namespace VoxelRenderEngine.src.UI
+namespace VelmoraCraft.src.UI
 {
     public enum UIState
     {
@@ -35,6 +35,7 @@ namespace VoxelRenderEngine.src.UI
         public Action? OnSaveGameRequested { get; set; }
         public Func<bool>? IsFullscreenGetter { get; set; }
         public Action? OnToggleFullscreenRequested { get; set; }
+        public Action? OnSettingsChanged { get; set; }
         public bool IsFullscreen => IsFullscreenGetter?.Invoke() ?? false;
         public bool IsHudEnabled { get; set; } = true;
         public DayNightCycle? DayNightCycle { get; set; }
@@ -80,17 +81,24 @@ namespace VoxelRenderEngine.src.UI
         // Render Distance & FOV Slider settings
         private int renderDistanceChunks = 8;
         private bool isDraggingRenderDistanceSlider = false;
-        public int RenderDistanceChunks => renderDistanceChunks;
+        public int RenderDistanceChunks
+        {
+            get => renderDistanceChunks;
+            set => SetRenderDistance(value);
+        }
 
         private bool isDraggingFovSlider = false;
+        private float savedFov = 70f;
         public float FieldOfView
         {
-            get => player?.Camera?.BaseFov ?? 70f;
+            get => player?.Camera?.BaseFov ?? savedFov;
             set
             {
+                savedFov = Math.Clamp(value, 30f, 110f);
                 if (player?.Camera != null)
                 {
-                    player.Camera.BaseFov = Math.Clamp(value, 30f, 110f);
+                    player.Camera.BaseFov = savedFov;
+                    player.Camera.CurrentFov = savedFov;
                 }
             }
         }
@@ -128,6 +136,11 @@ namespace VoxelRenderEngine.src.UI
         public void SetPlayer(Player player)
         {
             this.player = player;
+            if (player?.Camera != null)
+            {
+                player.Camera.BaseFov = savedFov;
+                player.Camera.CurrentFov = savedFov;
+            }
         }
 
         public void SetWorld(World.World? world)
@@ -135,7 +148,7 @@ namespace VoxelRenderEngine.src.UI
             this.world = world;
             if (world != null)
             {
-                renderDistanceChunks = world.ViewDistanceChunks;
+                world.ViewDistanceChunks = renderDistanceChunks;
             }
         }
 
@@ -238,6 +251,7 @@ namespace VoxelRenderEngine.src.UI
             if (f1Down && !f1KeyWasDown)
             {
                 IsHudEnabled = !IsHudEnabled;
+                OnSettingsChanged?.Invoke();
             }
             f1KeyWasDown = f1Down;
 
@@ -246,6 +260,7 @@ namespace VoxelRenderEngine.src.UI
             if (f11Down && !f11KeyWasDown)
             {
                 OnToggleFullscreenRequested?.Invoke();
+                OnSettingsChanged?.Invoke();
             }
             f11KeyWasDown = f11Down;
 
@@ -352,6 +367,7 @@ namespace VoxelRenderEngine.src.UI
                 {
                     player.IsFlying = !player.IsFlying;
                     player.Velocity = Vector3.Zero;
+                    OnSettingsChanged?.Invoke();
                 }
                 return;
             }
@@ -366,12 +382,14 @@ namespace VoxelRenderEngine.src.UI
             if (leftClicked && mx >= toggle1X && mx <= toggle1X + toggleW && my >= btn5Y && my <= btn5Y + btnH)
             {
                 OnToggleFullscreenRequested?.Invoke();
+                OnSettingsChanged?.Invoke();
                 return;
             }
 
             if (leftClicked && mx >= toggle2X && mx <= toggle2X + toggleW && my >= btn5Y && my <= btn5Y + btnH)
             {
                 IsHudEnabled = !IsHudEnabled;
+                OnSettingsChanged?.Invoke();
                 return;
             }
 
@@ -396,7 +414,11 @@ namespace VoxelRenderEngine.src.UI
             {
                 float pct = Math.Clamp((mx - track1X) / track1W, 0f, 1f);
                 int chunks = 2 + (int)MathF.Round(pct * 14f);
-                SetRenderDistance(chunks);
+                if (chunks != renderDistanceChunks)
+                {
+                    SetRenderDistance(chunks);
+                    OnSettingsChanged?.Invoke();
+                }
             }
 
             // 7. FOV Slider (30 to 110 degrees)
@@ -420,7 +442,11 @@ namespace VoxelRenderEngine.src.UI
             {
                 float pct = Math.Clamp((mx - track2X) / track2W, 0f, 1f);
                 int newFov = 30 + (int)MathF.Round(pct * 80f);
-                FieldOfView = newFov;
+                if ((int)MathF.Round(FieldOfView) != newFov)
+                {
+                    FieldOfView = newFov;
+                    OnSettingsChanged?.Invoke();
+                }
             }
 
             // 8. Quit to Desktop

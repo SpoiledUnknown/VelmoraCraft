@@ -1,6 +1,6 @@
-using OpenTK.Mathematics;
+﻿using OpenTK.Mathematics;
 
-namespace VoxelRenderEngine.src.World
+namespace VelmoraCraft.src.World
 {
     public class FluidSystem
     {

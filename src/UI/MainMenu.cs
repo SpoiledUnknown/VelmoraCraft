@@ -1,7 +1,7 @@
 using OpenTK.Mathematics;
 using OpenTK.Windowing.GraphicsLibraryFramework;
 
-namespace VoxelRenderEngine.src.UI
+namespace VelmoraCraft.src.UI
 {
     public enum ModalField
     {
@@ -35,13 +35,36 @@ namespace VoxelRenderEngine.src.UI
 
         private readonly string[] splashes = new string[]
         {
-            "Now with Multithreaded Streaming!",
-            "Configurable World Size!",
-            "Zero Startup Freeze!",
-            "Dynamic Day & Night!",
-            "Rideable Minecarts!",
             "Infinite Possibilities!",
-            "Powered by C# & OpenTK!"
+            "A Minecraft Alpha Clone!",
+            "Powered by C# & OpenTK!",
+            "OpenGL 3.3 Core!",
+            "Now with Working Beds!",
+            "Swaying Foliage & Grass!",
+            "Farming & Harvesting!",
+            "Rideable Minecarts!",
+            "Watch out for Creepers!",
+            "Don't dig straight down!",
+            "Dynamic Day & Night!",
+            "Procedural Voxel Worlds!",
+            "Punching Trees!",
+            "Zero Startup Freeze!",
+            "Sleeping skips the night!",
+            "Multi-threaded Chunks!",
+            "Alpha 1.2.6 Nostalgia!",
+            "100% Pure Voxels!",
+            "Fast Simplex Noise!",
+            "Beware of the Dark!",
+            "Water Buoyancy & Swimming!",
+            "Crafting & Smelting!",
+            "Press Ctrl to Sprint!",
+            "Press F2 for Screenshots!",
+            "Also try Classic!",
+            "Block by block!",
+            "Sunrise over the mountains!",
+            "Caves and Cliffs!",
+            "Torches light the way!",
+            "Double Chests supported!"
         };
         private int currentSplashIndex = 0;
 
@@ -54,6 +77,11 @@ namespace VoxelRenderEngine.src.UI
         public MainMenu(UIRenderer renderer)
         {
             this.renderer = renderer;
+            RandomizeSplash();
+        }
+
+        public void RandomizeSplash()
+        {
             currentSplashIndex = Random.Shared.Next(splashes.Length);
         }
 
@@ -316,23 +344,11 @@ namespace VoxelRenderEngine.src.UI
         {
             renderer.Begin(screenW, screenH);
 
-            // Subtle dark vignette gradient at top and bottom to ground the 3D background
-            renderer.DrawQuad(0, 0, screenW, 100, new Vector4(0f, 0f, 0.05f, 0.45f));
-            renderer.DrawQuad(0, screenH - 60, screenW, 60, new Vector4(0f, 0f, 0.05f, 0.55f));
-
-            // Title Banner: "VOXEL ENGINE"
+            // Title Banner: "VELMORACRAFT"
             RenderTitleLogo(screenW, screenH);
 
             // Main Menu Buttons
             RenderMenuButtons(screenW, screenH, mousePos);
-
-            // Version info & copyright text
-            string version = "Voxel Engine v0.6 (OpenTK Core)";
-            renderer.DrawText(version, 12f, screenH - 24f, 1.0f, new Vector4(0.8f, 0.85f, 0.95f, 0.7f), shadow: true);
-
-            string author = "Real-time Multithreaded Streaming Engine";
-            Vector2 authorSz = renderer.MeasureText(author, 1.0f);
-            renderer.DrawText(author, screenW - authorSz.X - 12f, screenH - 24f, 1.0f, new Vector4(0.8f, 0.85f, 0.95f, 0.7f), shadow: true);
 
             // Seed & World Setup Pop-up Modal if open
             if (IsSeedModalOpen)
@@ -345,7 +361,7 @@ namespace VoxelRenderEngine.src.UI
 
         private void RenderTitleLogo(int screenW, int screenH)
         {
-            string title = "VOXEL ENGINE";
+            string title = "VELMORACRAFT";
             float scale = 3.6f;
             Vector2 titleSz = renderer.MeasureText(title, scale);
             float tx = (screenW - titleSz.X) * 0.5f;
@@ -359,8 +375,8 @@ namespace VoxelRenderEngine.src.UI
             renderer.DrawText(title, tx, ty, scale, new Vector4(1.0f, 0.82f, 0.28f, 1.0f), shadow: false);
 
             // Subtitle
-            string sub = "- A High-Performance Voxel Sandbox -";
-            float subScale = 1.25f;
+            string sub = "A minecraft alpha clone in OpenTK (OpenGL C#)";
+            float subScale = 1.15f;
             Vector2 subSz = renderer.MeasureText(sub, subScale);
             renderer.DrawText(sub, (screenW - subSz.X) * 0.5f, ty + titleSz.Y + 12f, subScale, new Vector4(0.9f, 0.92f, 0.98f, 0.9f), shadow: true);
 
@@ -370,7 +386,7 @@ namespace VoxelRenderEngine.src.UI
             float splashScale = 1.2f * pulse;
             Vector2 splashSz = renderer.MeasureText(splash, splashScale);
 
-            float splashX = tx + titleSz.X - 40f;
+            float splashX = tx + titleSz.X - 30f;
             float splashY = ty + titleSz.Y - 6f;
 
             renderer.DrawText(splash, splashX + 2f, splashY + 2f, splashScale, new Vector4(0.1f, 0.1f, 0.02f, 0.9f), shadow: false);

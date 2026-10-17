@@ -1,9 +1,9 @@
 using OpenTK.Mathematics;
 using OpenTK.Windowing.GraphicsLibraryFramework;
-using VoxelRenderEngine.src.Physics;
-using VoxelRenderEngine.src.World;
+using VelmoraCraft.src.Physics;
+using VelmoraCraft.src.World;
 
-namespace VoxelRenderEngine.src.Entities
+namespace VelmoraCraft.src.Entities
 {
     public class Player
     {
@@ -15,7 +15,7 @@ namespace VoxelRenderEngine.src.Entities
         public float Height { get; } = 1.8f;
         public float EyeHeight { get; } = 1.62f;
 
-        public bool IsGrounded { get; private set; } = false;
+        public bool IsGrounded { get; set; } = false;
         public bool IsFlying { get; set; } = false;
 
         public float MoveSpeed { get; set; } = 4.3f;
@@ -64,6 +64,7 @@ namespace VoxelRenderEngine.src.Entities
         public Audio.AudioManager? AudioManager { get; set; }
         public Action? OnPortalEntered { get; set; }
         public Action<Vector3i>? OnUseBed { get; set; }
+        public Action? OnFlyToggled { get; set; }
 
         public int BlocksBroken { get; set; } = 0;
         public int BlocksPlaced { get; set; } = 0;
@@ -102,6 +103,16 @@ namespace VoxelRenderEngine.src.Entities
             Oxygen = MaxOxygen;
             Stamina = MaxStamina;
             UpdateCamera();
+        }
+
+        public void PopulateTestingInventory()
+        {
+            // Testing phase completed - starting inventory is empty for authentic gameplay
+        }
+
+        public void EnsureTestingItems()
+        {
+            // Testing phase completed
         }
 
         public AABB GetAABB()
@@ -219,6 +230,7 @@ namespace VoxelRenderEngine.src.Entities
             {
                 IsFlying = !IsFlying;
                 Velocity = Vector3.Zero;
+                OnFlyToggled?.Invoke();
             }
             fKeyWasDown = keyboard.IsKeyDown(Keys.F);
         }
@@ -226,7 +238,7 @@ namespace VoxelRenderEngine.src.Entities
         private void UpdateFlyMovement(KeyboardState keyboard, float deltaTime)
         {
             float speed = MoveSpeed * 3.5f;
-            if (keyboard.IsKeyDown(Keys.LeftControl)) speed *= 2.0f;
+            if (keyboard.IsKeyDown(Keys.LeftControl) || keyboard.IsKeyDown(Keys.RightControl)) speed *= 2.0f;
 
             Vector3 move = Vector3.Zero;
             if (keyboard.IsKeyDown(Keys.W)) move += Camera.Forward;
@@ -292,8 +304,8 @@ namespace VoxelRenderEngine.src.Entities
                 wishDir = Vector3.Normalize(wishDir);
             }
 
-            // Sprint key handling (Shift or Ctrl key)
-            bool sprintKey = keyboard.IsKeyDown(Keys.LeftShift) || keyboard.IsKeyDown(Keys.RightShift) || keyboard.IsKeyDown(Keys.LeftControl);
+            // Sprint key handling (Ctrl key only)
+            bool sprintKey = keyboard.IsKeyDown(Keys.LeftControl) || keyboard.IsKeyDown(Keys.RightControl);
             bool isMovingHorizontally = wishDir.LengthSquared > 0.001f;
             float speed = MoveSpeed;
 
@@ -520,8 +532,71 @@ namespace VoxelRenderEngine.src.Entities
             }
         }
 
+        public void ResolveStuckInBlocks(World.World world)
+        {
+            if (IsFlying) return;
+
+            // Up to 4 passes to resolve compound overlaps (e.g. slopes, corners, steps)
+            for (int iteration = 0; iteration < 4; iteration++)
+            {
+                AABB pBox = GetAABB();
+                int minX = (int)MathF.Floor(pBox.Min.X);
+                int maxX = (int)MathF.Ceiling(pBox.Max.X);
+                int minY = (int)MathF.Floor(pBox.Min.Y);
+                int maxY = (int)MathF.Ceiling(pBox.Max.Y);
+                int minZ = (int)MathF.Floor(pBox.Min.Z);
+                int maxZ = (int)MathF.Ceiling(pBox.Max.Z);
+
+                float pushUpTarget = float.MinValue;
+                bool isIntersecting = false;
+
+                for (int x = minX; x <= maxX; x++)
+                {
+                    for (int y = minY; y <= maxY; y++)
+                    {
+                        for (int z = minZ; z <= maxZ; z++)
+                        {
+                            byte b = world.GetBlockWorld(x, y, z);
+                            if (BlockRegistry.IsSolid(b))
+                            {
+                                AABB blockBox = new AABB(x - 0.5f, y - 0.5f, z - 0.5f, x + 0.5f, y + 0.5f, z + 0.5f);
+                                if (pBox.Intersects(blockBox))
+                                {
+                                    isIntersecting = true;
+                                    // If block intersects player's feet or lower body
+                                    if (blockBox.Max.Y > pBox.Min.Y && blockBox.Max.Y <= pBox.Max.Y + 0.1f)
+                                    {
+                                        if (blockBox.Max.Y > pushUpTarget)
+                                        {
+                                            pushUpTarget = blockBox.Max.Y;
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+
+                if (!isIntersecting || pushUpTarget <= float.MinValue)
+                {
+                    break;
+                }
+
+                Position = new Vector3(Position.X, pushUpTarget, Position.Z);
+                Velocity = new Vector3(Velocity.X, MathF.Max(0, Velocity.Y), Velocity.Z);
+                IsGrounded = true;
+            }
+
+            UpdateCamera();
+        }
+
         private void MoveWithCollision(World.World world, Vector3 movement)
         {
+            if (!IsFlying)
+            {
+                ResolveStuckInBlocks(world);
+            }
+
             AABB playerBox = GetAABB();
 
             // Broad-phase query surrounding blocks
@@ -563,7 +638,7 @@ namespace VoxelRenderEngine.src.Entities
                             movement.Y = box.Min.Y - playerBox.Max.Y;
                             Velocity = new Vector3(Velocity.X, 0, Velocity.Z);
                         }
-                        else if (movement.Y < 0 && playerBox.Min.Y >= box.Max.Y - 0.05f && playerBox.Min.Y + movement.Y <= box.Max.Y)
+                        else if (movement.Y < 0 && playerBox.Min.Y >= box.Max.Y - 0.5f && playerBox.Min.Y + movement.Y <= box.Max.Y && playerBox.Max.Y > box.Max.Y)
                         {
                             movement.Y = box.Max.Y - playerBox.Min.Y;
                             Velocity = new Vector3(Velocity.X, 0, Velocity.Z);
@@ -930,7 +1005,7 @@ namespace VoxelRenderEngine.src.Entities
                     {
                         if (blockId == (byte)BlockType.Chest)
                         {
-                            if (VoxelRenderEngine.src.UI.ChestManager.TryGetDoubleChestPartner(bp, (x, y, z) => world.GetBlockWorld(x, y, z), out var partnerPos, out _, out bool isAxisX))
+                            if (VelmoraCraft.src.UI.ChestManager.TryGetDoubleChestPartner(bp, (x, y, z) => world.GetBlockWorld(x, y, z), out var partnerPos, out _, out bool isAxisX))
                             {
                                 byte currentMeta = world.GetBlockMetadata(bp.X, bp.Y, bp.Z);
                                 byte nextMeta;
@@ -957,6 +1032,29 @@ namespace VoxelRenderEngine.src.Entities
                                 rightClickWasDown = true;
                                 return;
                             }
+                        }
+                        else if (BlockRegistry.IsDoorBlock(blockId))
+                        {
+                            Vector3i otherPos = bp;
+                            if (blockId == (byte)BlockType.DoorLower || blockId == (byte)BlockType.DoorLowerOpen ||
+                                blockId == (byte)BlockType.IronDoorLower || blockId == (byte)BlockType.IronDoorLowerOpen)
+                            {
+                                otherPos = bp + Vector3i.UnitY;
+                            }
+                            else
+                            {
+                                otherPos = bp - Vector3i.UnitY;
+                            }
+                            byte currentMeta = world.GetBlockMetadata(bp.X, bp.Y, bp.Z);
+                            byte nextMeta = (byte)((currentMeta + 1) % 4);
+                            world.SetBlockMetadata(bp.X, bp.Y, bp.Z, nextMeta);
+                            if (BlockRegistry.IsDoorBlock(world.GetBlockWorld(otherPos.X, otherPos.Y, otherPos.Z)))
+                            {
+                                world.SetBlockMetadata(otherPos.X, otherPos.Y, otherPos.Z, nextMeta);
+                            }
+                            AudioManager?.PlayCategorySound("wood", volume: 0.5f, pitchVariance: 0.1f);
+                            rightClickWasDown = true;
+                            return;
                         }
                         else if (BlockRegistry.IsDirectionalBlock((BlockType)blockId))
                         {
@@ -1131,8 +1229,18 @@ namespace VoxelRenderEngine.src.Entities
                                 if (!pBox.Intersects(lowerBox) && !pBox.Intersects(upperBox))
                                 {
                                     bool isIron = hotbarStack.Type == BlockType.IronDoorLower;
-                                    world.SetBlockWorld(pb.X, pb.Y, pb.Z, isIron ? BlockType.IronDoorLower : BlockType.DoorLower);
-                                    world.SetBlockWorld(pb.X, pb.Y + 1, pb.Z, isIron ? BlockType.IronDoorUpper : BlockType.DoorUpper);
+                                    byte facing;
+                                    if (MathF.Abs(Camera.Forward.Z) > MathF.Abs(Camera.Forward.X))
+                                    {
+                                        facing = Camera.Forward.Z < 0 ? (byte)BlockFacing.South : (byte)BlockFacing.North;
+                                    }
+                                    else
+                                    {
+                                        facing = Camera.Forward.X < 0 ? (byte)BlockFacing.East : (byte)BlockFacing.West;
+                                    }
+
+                                    world.SetBlockWorld(pb.X, pb.Y, pb.Z, isIron ? BlockType.IronDoorLower : BlockType.DoorLower, metadata: facing);
+                                    world.SetBlockWorld(pb.X, pb.Y + 1, pb.Z, isIron ? BlockType.IronDoorUpper : BlockType.DoorUpper, metadata: facing);
                                     BlocksPlaced += 2;
                                     AudioManager?.PlayBlockPlaceSound(isIron ? BlockType.IronBlock : BlockType.Planks);
                                     Inventory.Slots[SelectedHotbarSlot].Count--;

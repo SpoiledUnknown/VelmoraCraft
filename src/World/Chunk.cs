@@ -1,8 +1,8 @@
 using OpenTK.Graphics.OpenGL;
 using OpenTK.Mathematics;
-using VoxelRenderEngine.src.Graphics;
+using VelmoraCraft.src.Graphics;
 
-namespace VoxelRenderEngine.src.World
+namespace VelmoraCraft.src.World
 {
     public class Chunk
     {
@@ -20,6 +20,7 @@ namespace VoxelRenderEngine.src.World
 
         public bool IsMeshDirty { get; set; } = true;
         public bool IsGeneratingMesh { get; set; } = false;
+        public bool NeedsRemesh { get; set; } = false;
         public bool IsTerrainGenerated { get; set; } = false;
         public bool IsDecorated { get; set; } = false;
         public bool HasMesh => (opaqueIndexCount > 0 || waterIndexCount > 0) && chunkVAO != null && ibo != null;
@@ -123,11 +124,12 @@ namespace VoxelRenderEngine.src.World
             vbo = new VertexBufferObject(mesh.VerticesSpan);
             vbo.Bind();
 
-            // Link interleaved vertex attributes: Pos (loc 0), UV (loc 1), Color (loc 2), Normal (loc 3)
+            // Link interleaved vertex attributes: Pos (loc 0), UV (loc 1), Color (loc 2), Normal (loc 3), Sway (loc 4)
             chunkVAO.LinkToVAO(0, 3, ChunkVertex.SizeInBytes, 0);   // Position (vec3)
             chunkVAO.LinkToVAO(1, 2, ChunkVertex.SizeInBytes, 12);  // TexCoord (vec2)
             chunkVAO.LinkToVAO(2, 3, ChunkVertex.SizeInBytes, 20);  // Color (vec3)
             chunkVAO.LinkToVAO(3, 3, ChunkVertex.SizeInBytes, 32);  // Normal (vec3)
+            chunkVAO.LinkToVAO(4, 1, ChunkVertex.SizeInBytes, 44);  // SwayWeight (float)
 
             ibo = new IndexBufferObject(mesh.IndicesSpan);
 

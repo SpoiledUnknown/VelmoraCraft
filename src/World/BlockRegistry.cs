@@ -1,6 +1,6 @@
 using OpenTK.Mathematics;
 
-namespace VoxelRenderEngine.src.World
+namespace VelmoraCraft.src.World
 {
     public enum BlockType : byte
     {
@@ -404,9 +404,9 @@ namespace VoxelRenderEngine.src.World
             Register(CreateUniformBlock(BlockType.MinecartItem, "Minecart", isSolid: false, isTransparent: true, hardness: 0f, new Vector2(6, 0)));
 
             // 7. Nether Portal Block (Translucent, glowing purple endgame rift)
-            Register(CreateUniformBlock(BlockType.Portal, "Nether Portal", isSolid: false, isTransparent: true, hardness: 0f, new Vector2(14, 0), tintColor: new Vector3(0.75f, 0.20f, 0.95f), isLightSource: true));
+            Register(CreateUniformBlock(BlockType.Portal, "Nether Portal", isSolid: false, isTransparent: true, hardness: 0f, new Vector2(14, 12), tintColor: new Vector3(0.75f, 0.20f, 0.95f), isLightSource: true));
 
-            // 8. Bed (Foot top at (6,8), Head top at (7,8), Side/End textures from (5,9) to (8,9))
+            // 8. Bed (Foot top at (6,8), Head top at (7,8), Foot End (5,9), Foot Side (6,9), Head End (8,9), Head Side (7,9))
             Register(new BlockDefinition(
                 BlockType.BedFoot,
                 "Bed",
@@ -415,10 +415,10 @@ namespace VoxelRenderEngine.src.World
                 hardness: 0.2f,
                 faceUVCoords: new[]
                 {
-                    new Vector2(6, 9), // Front (Foot end)
-                    new Vector2(8, 9), // Back (Side)
-                    new Vector2(8, 9), // Left (Side)
-                    new Vector2(8, 9), // Right (Side)
+                    new Vector2(5, 9), // Front (Foot end)
+                    new Vector2(6, 9), // Back (Inner)
+                    new Vector2(6, 9), // Left (Side)
+                    new Vector2(6, 9), // Right (Side)
                     new Vector2(6, 8), // Top (Foot top)
                     new Vector2(4, 0)  // Bottom (Wood)
                 },
@@ -432,8 +432,8 @@ namespace VoxelRenderEngine.src.World
                 hardness: 0.2f,
                 faceUVCoords: new[]
                 {
-                    new Vector2(7, 9), // Front (Side)
-                    new Vector2(5, 9), // Back (Head end)
+                    new Vector2(8, 9), // Front (Head end)
+                    new Vector2(7, 9), // Back (Inner)
                     new Vector2(7, 9), // Left (Side)
                     new Vector2(7, 9), // Right (Side)
                     new Vector2(7, 8), // Top (Head top)
@@ -466,14 +466,14 @@ namespace VoxelRenderEngine.src.World
             Register(CreateUniformBlock(BlockType.SugarCane, "Sugar Cane", isSolid: false, isTransparent: true, hardness: 0f, new Vector2(9, 4), meshType: MeshType.CrossQuad));
 
             // --- Flora, Plants & Crops ---
-            Register(CreateUniformBlock(BlockType.TallGrass, "Tall Grass", isSolid: false, isTransparent: true, hardness: 0f, new Vector2(4, 9), tintColor: new Vector3(0.55f, 0.82f, 0.38f), meshType: MeshType.CrossQuad));
+            Register(CreateUniformBlock(BlockType.TallGrass, "Tall Grass", isSolid: false, isTransparent: true, hardness: 0f, new Vector2(13, 5), tintColor: new Vector3(0.85f, 1.0f, 0.85f), meshType: MeshType.CrossQuad));
             Register(CreateUniformBlock(BlockType.Rose, "Rose", isSolid: false, isTransparent: true, hardness: 0f, new Vector2(12, 0), meshType: MeshType.CrossQuad));
             Register(CreateUniformBlock(BlockType.Dandelion, "Dandelion", isSolid: false, isTransparent: true, hardness: 0f, new Vector2(13, 0), meshType: MeshType.CrossQuad));
             Register(CreateUniformBlock(BlockType.RedMushroom, "Red Mushroom", isSolid: false, isTransparent: true, hardness: 0f, new Vector2(12, 1), meshType: MeshType.CrossQuad));
             Register(CreateUniformBlock(BlockType.BrownMushroom, "Brown Mushroom", isSolid: false, isTransparent: true, hardness: 0f, new Vector2(13, 1), meshType: MeshType.CrossQuad));
             Register(CreateUniformBlock(BlockType.OakSapling, "Oak Sapling", isSolid: false, isTransparent: true, hardness: 0f, new Vector2(15, 0), meshType: MeshType.CrossQuad));
             Register(CreateUniformBlock(BlockType.Wheat, "Wheat", isSolid: false, isTransparent: true, hardness: 0f, new Vector2(15, 5), meshType: MeshType.CrossQuad));
-            Register(CreateUniformBlock(BlockType.WheatSeeds, "Wheat Seeds", isSolid: false, isTransparent: true, hardness: 0f, new Vector2(7, 5)));
+            Register(CreateUniformBlock(BlockType.WheatSeeds, "Wheat Seeds", isSolid: false, isTransparent: true, hardness: 0f, new Vector2(8, 5)));
             Register(CreateMultiFaceBlock(BlockType.Farmland, "Farmland", isSolid: true, isTransparent: false, hardness: 0.6f, top: new Vector2(6, 5), side: new Vector2(2, 0), bottom: new Vector2(2, 0)));
 
             // --- Construction & Building ---
@@ -640,5 +640,17 @@ namespace VoxelRenderEngine.src.World
             type == BlockType.PoweredRailOn;
 
         public static bool IsRailBlock(byte type) => IsRailBlock((BlockType)type);
+
+        public static bool IsDoorBlock(BlockType type) =>
+            type == BlockType.DoorLower ||
+            type == BlockType.DoorUpper ||
+            type == BlockType.DoorLowerOpen ||
+            type == BlockType.DoorUpperOpen ||
+            type == BlockType.IronDoorLower ||
+            type == BlockType.IronDoorUpper ||
+            type == BlockType.IronDoorLowerOpen ||
+            type == BlockType.IronDoorUpperOpen;
+
+        public static bool IsDoorBlock(byte type) => IsDoorBlock((BlockType)type);
     }
 }

@@ -1,10 +1,10 @@
 using OpenTK.Graphics.OpenGL;
 using OpenTK.Mathematics;
 using System.Collections.Concurrent;
-using VoxelRenderEngine.src.Entities;
-using VoxelRenderEngine.src.Graphics;
+using VelmoraCraft.src.Entities;
+using VelmoraCraft.src.Graphics;
 
-namespace VoxelRenderEngine.src.World
+namespace VelmoraCraft.src.World
 {
     public class World
     {
@@ -66,7 +66,18 @@ namespace VoxelRenderEngine.src.World
         public readonly HashSet<Vector3i> GrowingCrops = new HashSet<Vector3i>();
         private float cropGrowthTimer = 0f;
 
-        public World(int seed = 1337, int worldChunks = 64, Vector2i? initialSpawnChunk = null)
+        // Configurable grass spread parameters (dirt turns to grass after 1-2 in-game days when near grass)
+        public static float GrassSpreadMinDays = 1.0f;
+        public static float GrassSpreadMaxDays = 2.0f;
+        public static float InGameDaySeconds = DayNightCycle.TOTAL_CYCLE_DURATION; // 1200.0f (20 mins)
+
+        public readonly ConcurrentDictionary<Vector3i, float> PendingDirtGrassSpread = new ConcurrentDictionary<Vector3i, float>();
+        private float dirtSpreadTimer = 0f;
+
+        public DayNightCycle? DayNightCycle { get; set; }
+        private float cobwebSpawnTimer = 0f;
+
+        public World(int seed = 1337, int worldChunks = 64, Vector2i? initialSpawnChunk = null, IEnumerable<BlockChangeData>? initialModifiedBlocks = null)
         {
             Seed = seed;
             WorldChunksX = Math.Clamp(worldChunks, 8, 256);
@@ -76,14 +87,28 @@ namespace VoxelRenderEngine.src.World
             ActiveWorldSizeX = WorldSizeX;
             ActiveWorldSizeZ = WorldSizeZ;
 
+            // Pre-populate modified blocks so synchronous spawn generation and early meshing include player blocks
+            if (initialModifiedBlocks != null)
+            {
+                foreach (var b in initialModifiedBlocks)
+                {
+                    var pos = new Vector3i(b.X, b.Y, b.Z);
+                    ModifiedBlocks[pos] = (BlockType)b.BlockType;
+                    if (b.Metadata > 0)
+                    {
+                        BlockMetadataMap[pos] = b.Metadata;
+                    }
+                }
+            }
+
             generator = new WorldGenerator(seed);
 
             Vector2i spawnChunk = initialSpawnChunk ?? new Vector2i(WorldChunksX / 2, WorldChunksZ / 2);
 
-            // 1. Immediately generate immediate 3x3 spawn chunks synchronously for instant ground collision
-            for (int dx = -1; dx <= 1; dx++)
+            // 1. Immediately generate 5x5 spawn chunks synchronously for instant ground collision and fluid/block safety
+            for (int dx = -2; dx <= 2; dx++)
             {
-                for (int dz = -1; dz <= 1; dz++)
+                for (int dz = -2; dz <= 2; dz++)
                 {
                     var coord = new Vector2i(spawnChunk.X + dx, spawnChunk.Y + dz);
                     if (IsChunkInsideWorld(coord))
@@ -92,18 +117,30 @@ namespace VoxelRenderEngine.src.World
                         if (!chunk.IsTerrainGenerated)
                         {
                             generator.GenerateChunkTerrain(chunk);
+                            ApplyModifiedBlocksToChunk(chunk);
                             chunk.IsTerrainGenerated = true;
                         }
                     }
                 }
             }
 
-            // Decorate center spawn chunk
-            var centerChunk = GetOrCreateChunk(spawnChunk);
-            if (!centerChunk.IsDecorated)
+            // Decorate 3x3 chunks around spawn synchronously
+            for (int dx = -1; dx <= 1; dx++)
             {
-                generator.DecorateChunk(this, centerChunk);
-                centerChunk.IsDecorated = true;
+                for (int dz = -1; dz <= 1; dz++)
+                {
+                    var coord = new Vector2i(spawnChunk.X + dx, spawnChunk.Y + dz);
+                    if (IsChunkInsideWorld(coord))
+                    {
+                        var chunk = GetOrCreateChunk(coord);
+                        if (!chunk.IsDecorated)
+                        {
+                            generator.DecorateChunk(this, chunk);
+                            ApplyModifiedBlocksToChunk(chunk);
+                            chunk.IsDecorated = true;
+                        }
+                    }
+                }
             }
 
             // 2. Start background worker threads for generation and meshing
@@ -136,6 +173,35 @@ namespace VoxelRenderEngine.src.World
         public Chunk GetOrCreateChunk(Vector2i coord)
         {
             return chunks.GetOrAdd(coord, c => new Chunk(c));
+        }
+
+        public void ApplyModifiedBlocksToChunk(Chunk chunk)
+        {
+            if (ModifiedBlocks.IsEmpty) return;
+
+            int minX = chunk.ChunkCoord.X * Chunk.SIZE_X;
+            int maxX = minX + Chunk.SIZE_X;
+            int minZ = chunk.ChunkCoord.Y * Chunk.SIZE_Z;
+            int maxZ = minZ + Chunk.SIZE_Z;
+
+            foreach (var kvp in ModifiedBlocks)
+            {
+                var pos = kvp.Key;
+                if (pos.X >= minX && pos.X < maxX && pos.Z >= minZ && pos.Z < maxZ)
+                {
+                    int lx = pos.X - minX;
+                    int lz = pos.Z - minZ;
+                    chunk.SetBlock(lx, pos.Y, lz, kvp.Value);
+                    if (BlockMetadataMap.TryGetValue(pos, out byte meta))
+                    {
+                        chunk.SetMetadata(lx, pos.Y, lz, meta);
+                    }
+                    else
+                    {
+                        chunk.SetMetadata(lx, pos.Y, lz, 0);
+                    }
+                }
+            }
         }
 
         public Chunk? GetChunk(Vector2i coord)
@@ -250,6 +316,27 @@ namespace VoxelRenderEngine.src.World
                     }
                 }
 
+                if (type == BlockType.Dirt)
+                {
+                    CheckAndRegisterDirtForGrassSpread(pos);
+                }
+                else
+                {
+                    PendingDirtGrassSpread.TryRemove(pos, out _);
+                    if (type == BlockType.Grass)
+                    {
+                        CheckNeighborDirtForGrassSpread(pos);
+                    }
+                    else if (type == BlockType.Empty)
+                    {
+                        var below = new Vector3i(pos.X, pos.Y - 1, pos.Z);
+                        if (GetBlockWorld(below.X, below.Y, below.Z) == (byte)BlockType.Dirt)
+                        {
+                            CheckAndRegisterDirtForGrassSpread(below);
+                        }
+                    }
+                }
+
                 EnqueueChunk(coord);
 
                 // If block is on the edge of the chunk, also re-mesh adjacent chunk
@@ -257,6 +344,61 @@ namespace VoxelRenderEngine.src.World
                 if (lx == Chunk.SIZE_X - 1 && cx < WORLD_CHUNKS_X - 1) EnqueueChunk(new Vector2i(cx + 1, cz));
                 if (lz == 0 && cz > 0) EnqueueChunk(new Vector2i(cx, cz - 1));
                 if (lz == Chunk.SIZE_Z - 1 && cz < WORLD_CHUNKS_Z - 1) EnqueueChunk(new Vector2i(cx, cz + 1));
+            }
+        }
+
+        public bool HasAdjacentGrass(int x, int y, int z)
+        {
+            for (int dx = -1; dx <= 1; dx++)
+            {
+                for (int dy = -1; dy <= 1; dy++)
+                {
+                    for (int dz = -1; dz <= 1; dz++)
+                    {
+                        if (dx == 0 && dy == 0 && dz == 0) continue;
+                        if (GetBlockWorld(x + dx, y + dy, z + dz) == (byte)BlockType.Grass)
+                        {
+                            return true;
+                        }
+                    }
+                }
+            }
+            return false;
+        }
+
+        public void CheckAndRegisterDirtForGrassSpread(Vector3i pos)
+        {
+            byte above = GetBlockWorld(pos.X, pos.Y + 1, pos.Z);
+            bool isClear = !BlockRegistry.IsSolid(above) || BlockRegistry.Get(above).IsTransparent;
+            if (!isClear) return;
+
+            if (HasAdjacentGrass(pos.X, pos.Y, pos.Z))
+            {
+                if (!PendingDirtGrassSpread.ContainsKey(pos))
+                {
+                    float days = GrassSpreadMinDays + Random.Shared.NextSingle() * (GrassSpreadMaxDays - GrassSpreadMinDays);
+                    float durationSeconds = days * InGameDaySeconds;
+                    PendingDirtGrassSpread[pos] = durationSeconds;
+                }
+            }
+        }
+
+        public void CheckNeighborDirtForGrassSpread(Vector3i pos)
+        {
+            for (int dx = -1; dx <= 1; dx++)
+            {
+                for (int dy = -1; dy <= 1; dy++)
+                {
+                    for (int dz = -1; dz <= 1; dz++)
+                    {
+                        if (dx == 0 && dy == 0 && dz == 0) continue;
+                        var nPos = new Vector3i(pos.X + dx, pos.Y + dy, pos.Z + dz);
+                        if (GetBlockWorld(nPos.X, nPos.Y, nPos.Z) == (byte)BlockType.Dirt)
+                        {
+                            CheckAndRegisterDirtForGrassSpread(nPos);
+                        }
+                    }
+                }
             }
         }
 
@@ -317,12 +459,18 @@ namespace VoxelRenderEngine.src.World
 
             lock (queueLock)
             {
+                var chunk = GetOrCreateChunk(coord);
                 if (queuedChunks.Add(coord))
                 {
-                    var chunk = GetOrCreateChunk(coord);
                     chunk.IsGeneratingMesh = true;
+                    chunk.NeedsRemesh = false;
                     workQueue.Enqueue(coord);
                     workAvailable.Set();
+                }
+                else
+                {
+                    // Chunk is currently queued or being meshed; flag it so it immediately re-meshes with latest blocks
+                    chunk.NeedsRemesh = true;
                 }
             }
         }
@@ -356,6 +504,7 @@ namespace VoxelRenderEngine.src.World
                     if (!chunk.IsTerrainGenerated)
                     {
                         generator.GenerateChunkTerrain(chunk);
+                        ApplyModifiedBlocksToChunk(chunk);
                         chunk.IsTerrainGenerated = true;
                     }
 
@@ -373,21 +522,25 @@ namespace VoxelRenderEngine.src.World
                     if (leftChunk != null && !leftChunk.IsTerrainGenerated)
                     {
                         generator.GenerateChunkTerrain(leftChunk);
+                        ApplyModifiedBlocksToChunk(leftChunk);
                         leftChunk.IsTerrainGenerated = true;
                     }
                     if (rightChunk != null && !rightChunk.IsTerrainGenerated)
                     {
                         generator.GenerateChunkTerrain(rightChunk);
+                        ApplyModifiedBlocksToChunk(rightChunk);
                         rightChunk.IsTerrainGenerated = true;
                     }
                     if (frontChunk != null && !frontChunk.IsTerrainGenerated)
                     {
                         generator.GenerateChunkTerrain(frontChunk);
+                        ApplyModifiedBlocksToChunk(frontChunk);
                         frontChunk.IsTerrainGenerated = true;
                     }
                     if (backChunk != null && !backChunk.IsTerrainGenerated)
                     {
                         generator.GenerateChunkTerrain(backChunk);
+                        ApplyModifiedBlocksToChunk(backChunk);
                         backChunk.IsTerrainGenerated = true;
                     }
 
@@ -395,6 +548,7 @@ namespace VoxelRenderEngine.src.World
                     if (!chunk.IsDecorated)
                     {
                         generator.DecorateChunk(this, chunk);
+                        ApplyModifiedBlocksToChunk(chunk);
                         chunk.IsDecorated = true;
 
                         // Scan chunk for placed light sources (lava, torches)
@@ -437,15 +591,26 @@ namespace VoxelRenderEngine.src.World
             int uploaded = 0;
             while (uploaded < maxUploadsPerFrame && readyToUploadMeshes.TryDequeue(out var item))
             {
-                if (chunks.TryGetValue(item.coord, out var chunk))
+                bool needsRemesh = false;
+                Chunk? chunkObj = null;
+                if (chunks.TryGetValue(item.coord, out chunkObj))
                 {
-                    chunk.UploadMesh(item.mesh);
-                    chunk.IsGeneratingMesh = false;
+                    chunkObj.UploadMesh(item.mesh);
+                    chunkObj.IsGeneratingMesh = false;
+                    needsRemesh = chunkObj.NeedsRemesh;
+                    chunkObj.NeedsRemesh = false;
                     uploaded++;
                 }
                 lock (queueLock)
                 {
                     queuedChunks.Remove(item.coord);
+                    if (needsRemesh)
+                    {
+                        queuedChunks.Add(item.coord);
+                        if (chunkObj != null) chunkObj.IsGeneratingMesh = true;
+                        workQueue.Enqueue(item.coord);
+                        workAvailable.Set();
+                    }
                 }
                 item.mesh.Dispose();
             }
@@ -508,6 +673,89 @@ namespace VoxelRenderEngine.src.World
                             else
                             {
                                 GrowingCrops.Remove(cPos);
+                            }
+                        }
+                    }
+                }
+
+                // 4c. Dirt-to-grass spread simulation (dirt near grass turns into grass after 1-2 in-game days)
+                if (PendingDirtGrassSpread.Count > 0)
+                {
+                    dirtSpreadTimer += deltaTime;
+                    if (dirtSpreadTimer >= 1.0f) // Checked once per second
+                    {
+                        float step = dirtSpreadTimer;
+                        dirtSpreadTimer = 0f;
+
+                        var entries = PendingDirtGrassSpread.ToArray();
+                        foreach (var kvp in entries)
+                        {
+                            Vector3i dPos = kvp.Key;
+                            float remaining = kvp.Value - step;
+
+                            if (remaining <= 0f)
+                            {
+                                PendingDirtGrassSpread.TryRemove(dPos, out _);
+
+                                // Verify block is still dirt and eligible to convert
+                                if (GetBlockWorld(dPos.X, dPos.Y, dPos.Z) == (byte)BlockType.Dirt)
+                                {
+                                    byte above = GetBlockWorld(dPos.X, dPos.Y + 1, dPos.Z);
+                                    bool clear = !BlockRegistry.IsSolid(above) || BlockRegistry.Get(above).IsTransparent;
+                                    if (clear && HasAdjacentGrass(dPos.X, dPos.Y, dPos.Z))
+                                    {
+                                        SetBlockWorld(dPos.X, dPos.Y, dPos.Z, BlockType.Grass);
+                                    }
+                                }
+                            }
+                            else
+                            {
+                                PendingDirtGrassSpread[dPos] = remaining;
+                            }
+                        }
+                    }
+                }
+
+                // 4d. Cobweb spawning on trees at night
+                if (DayNightCycle != null && (DayNightCycle.CurrentPhase == DayNightPhase.Night || DayNightCycle.CurrentPhase == DayNightPhase.Dusk))
+                {
+                    cobwebSpawnTimer += deltaTime;
+                    if (cobwebSpawnTimer >= 1.5f) // Check every 1.5 seconds at night
+                    {
+                        cobwebSpawnTimer = 0f;
+                        int attempts = 4;
+                        for (int i = 0; i < attempts; i++)
+                        {
+                            int rx = (int)viewPosition.X + Random.Shared.Next(-28, 29);
+                            int rz = (int)viewPosition.Z + Random.Shared.Next(-28, 29);
+                            if (!IsInsideWorld(rx, rz)) continue;
+
+                            int surfaceY = GetSurfaceHeight(rx, rz);
+                            for (int ry = surfaceY + 7; ry >= surfaceY + 1; ry--)
+                            {
+                                byte b = GetBlockWorld(rx, ry, rz);
+                                if (b == (byte)BlockType.Leaves || b == (byte)BlockType.SpruceLeaves)
+                                {
+                                    int targetY = ry - 1;
+                                    if (targetY > 0 && GetBlockWorld(rx, targetY, rz) == (byte)BlockType.Empty)
+                                    {
+                                        int nearbyWebs = 0;
+                                        for (int dx = -2; dx <= 2 && nearbyWebs < 2; dx++)
+                                        {
+                                            for (int dz = -2; dz <= 2 && nearbyWebs < 2; dz++)
+                                            {
+                                                if (GetBlockWorld(rx + dx, targetY, rz + dz) == (byte)BlockType.Cobweb)
+                                                    nearbyWebs++;
+                                            }
+                                        }
+
+                                        if (nearbyWebs < 2)
+                                        {
+                                            SetBlockWorld(rx, targetY, rz, BlockType.Cobweb);
+                                            break;
+                                        }
+                                    }
+                                }
                             }
                         }
                     }

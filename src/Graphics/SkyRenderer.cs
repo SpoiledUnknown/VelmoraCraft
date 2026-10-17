@@ -1,8 +1,8 @@
 using OpenTK.Graphics.OpenGL;
 using OpenTK.Mathematics;
-using VoxelRenderEngine.src.World;
+using VelmoraCraft.src.World;
 
-namespace VoxelRenderEngine.src.Graphics
+namespace VelmoraCraft.src.Graphics
 {
     public class SkyRenderer : IDisposable
     {
@@ -49,6 +49,9 @@ namespace VoxelRenderEngine.src.Graphics
         /// Set to null to use the intuitive CloudAmount (0.0 to 1.0) scale.
         /// </summary>
         public float? CustomCloudThreshold { get; set; } = null;
+
+        public float CloudFadeStart { get; set; } = 110.0f;
+        public float CloudFadeEnd { get; set; } = 240.0f;
 
         public SkyRenderer()
         {
@@ -384,8 +387,8 @@ namespace VoxelRenderEngine.src.Graphics
             // Compute cloud color matching time of day
             Vector3 cloudColor = ComputeCloudColor(dayNightCycle);
             float cloudAlpha = 0.88f;
-            float fadeStart = 110.0f;
-            float fadeEnd = 240.0f;
+            float fadeStart = CloudFadeStart;
+            float fadeEnd = CloudFadeEnd;
 
             GL.Uniform3f(cloudColLoc, 1, ref cloudColor);
             GL.Uniform1f(cloudAlphaLoc, cloudAlpha);

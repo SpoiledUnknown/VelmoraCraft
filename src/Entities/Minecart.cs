@@ -1,10 +1,10 @@
-using OpenTK.Graphics.OpenGL;
+﻿using OpenTK.Graphics.OpenGL;
 using OpenTK.Mathematics;
-using VoxelRenderEngine.src.Graphics;
-using VoxelRenderEngine.src.Physics;
-using VoxelRenderEngine.src.World;
+using VelmoraCraft.src.Graphics;
+using VelmoraCraft.src.Physics;
+using VelmoraCraft.src.World;
 
-namespace VoxelRenderEngine.src.Entities
+namespace VelmoraCraft.src.Entities
 {
     public class Minecart
     {
