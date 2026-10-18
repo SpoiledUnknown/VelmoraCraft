@@ -1,4 +1,4 @@
-﻿using OpenTK.Graphics.OpenGL;
+using OpenTK.Graphics.OpenGL;
 using OpenTK.Mathematics;
 using VelmoraCraft.src.Graphics;
 using VelmoraCraft.src.Physics;
@@ -317,8 +317,10 @@ namespace VelmoraCraft.src.Entities
             isInitialized = true;
         }
 
-        public static void Render(IEnumerable<Minecart> minecarts, ShaderProgram shaderProgram)
+        public static void Render(IReadOnlyList<Minecart> minecarts, ShaderProgram shaderProgram)
         {
+            if (minecarts == null || minecarts.Count == 0) return;
+
             var def = BlockRegistry.Get(BlockType.MinecartItem);
             Vector2 currentUV = def.GetFaceAtlasCoord(Face.Front);
             Vector3 currentTint = def.TintColor;
@@ -335,13 +337,17 @@ namespace VelmoraCraft.src.Entities
             vao.Bind();
             ibo.Bind();
 
-            foreach (var cart in minecarts)
+            lock (minecarts)
             {
-                if (!cart.IsAlive) continue;
+                for (int i = 0; i < minecarts.Count; i++)
+                {
+                    var cart = minecarts[i];
+                    if (cart == null || !cart.IsAlive) continue;
 
-                Matrix4 model = Matrix4.CreateRotationY(cart.RotationY) * Matrix4.CreateTranslation(cart.Position);
-                GL.UniformMatrix4f(modelLoc, 1, true, ref model);
-                GL.DrawElements(PrimitiveType.Triangles, indexCount, DrawElementsType.UnsignedInt, 0);
+                    Matrix4 model = Matrix4.CreateRotationY(cart.RotationY) * Matrix4.CreateTranslation(cart.Position);
+                    GL.UniformMatrix4f(modelLoc, 1, true, ref model);
+                    GL.DrawElements(PrimitiveType.Triangles, indexCount, DrawElementsType.UnsignedInt, 0);
+                }
             }
 
             // Restore identity model matrix

@@ -38,6 +38,7 @@ namespace VelmoraCraft.src.UI
         public Action? OnSettingsChanged { get; set; }
         public bool IsFullscreen => IsFullscreenGetter?.Invoke() ?? false;
         public bool IsHudEnabled { get; set; } = true;
+        public bool IsDebugCoordinatesEnabled { get; set; } = false;
         public DayNightCycle? DayNightCycle { get; set; }
         private float saveNotificationTimer = 0f;
 
@@ -123,6 +124,7 @@ namespace VelmoraCraft.src.UI
         private bool eKeyWasDown = false;
         private bool escKeyWasDown = false;
         private bool f1KeyWasDown = false;
+        private bool f3KeyWasDown = false;
         private bool f11KeyWasDown = false;
         private bool leftMouseWasDown = false;
         private bool rightMouseWasDown = false;
@@ -254,6 +256,14 @@ namespace VelmoraCraft.src.UI
                 OnSettingsChanged?.Invoke();
             }
             f1KeyWasDown = f1Down;
+
+            // Toggle Coordinates / F3 Debug Screen with F3
+            bool f3Down = keyboard.IsKeyDown(Keys.F3);
+            if (f3Down && !f3KeyWasDown)
+            {
+                IsDebugCoordinatesEnabled = !IsDebugCoordinatesEnabled;
+            }
+            f3KeyWasDown = f3Down;
 
             // Toggle Fullscreen with F11
             bool f11Down = keyboard.IsKeyDown(Keys.F11);
@@ -921,6 +931,9 @@ namespace VelmoraCraft.src.UI
             // 1. Center Crosshair
             renderer.DrawCrosshair(screenW * 0.5f, screenH * 0.5f);
 
+            // Coordinates & Direction Badge / F3 Debug Overlay (Top Left)
+            RenderCoordinatesAndDebug(screenW, screenH);
+
             // In-game Clock Display (Top Right)
             float clockBottomY = 16f;
             if (DayNightCycle != null)
@@ -1056,6 +1069,96 @@ namespace VelmoraCraft.src.UI
                 Vector2 textSize = renderer.MeasureText(selText, 1.1f);
                 float textX = (screenW - textSize.X) * 0.5f;
                 renderer.DrawText(selText, textX, sliderY - 20f, 1.1f, new Vector4(1f, 1f, 1f, 0.9f), shadow: true);
+            }
+        }
+
+        private void RenderCoordinatesAndDebug(int screenW, int screenH)
+        {
+            if (player == null) return;
+
+            float posX = player.Position.X;
+            float posY = player.Position.Y;
+            float posZ = player.Position.Z;
+
+            int blockX = (int)MathF.Floor(posX);
+            int blockY = (int)MathF.Floor(posY);
+            int blockZ = (int)MathF.Floor(posZ);
+
+            int chunkX = (int)MathF.Floor(posX / Chunk.SIZE_X);
+            int chunkZ = (int)MathF.Floor(posZ / Chunk.SIZE_Z);
+            int subX = ((blockX % Chunk.SIZE_X) + Chunk.SIZE_X) % Chunk.SIZE_X;
+            int subZ = ((blockZ % Chunk.SIZE_Z) + Chunk.SIZE_Z) % Chunk.SIZE_Z;
+
+            Vector3 front = player.Camera?.Forward ?? -Vector3.UnitZ;
+            string facing = "North";
+            string axisDesc = "-Z";
+            if (MathF.Abs(front.X) > MathF.Abs(front.Z))
+            {
+                if (front.X > 0) { facing = "East"; axisDesc = "+X"; }
+                else { facing = "West"; axisDesc = "-X"; }
+            }
+            else
+            {
+                if (front.Z > 0) { facing = "South"; axisDesc = "+Z"; }
+                else { facing = "North"; axisDesc = "-Z"; }
+            }
+
+            string biomeName = (world != null && World.World.IsInsideWorld(blockX, blockZ))
+                ? world.GetBiome(blockX, blockZ).ToString()
+                : "Plains";
+
+            if (IsDebugCoordinatesEnabled)
+            {
+                // Full F3 Debug Screen (top-left)
+                List<string> debugLines = new List<string>
+                {
+                    "VelmoraCraft Engine (v1.2.0)",
+                    $"XYZ: {posX:F2} / {posY:F2} / {posZ:F2}",
+                    $"Block: {blockX} {blockY} {blockZ} [Chunk {chunkX}, {chunkZ} in sub {subX}, {subZ}]",
+                    $"Facing: {facing} ({axisDesc}) (Yaw: {player.Camera?.Yaw:F1}, Pitch: {player.Camera?.Pitch:F1})",
+                    $"Biome: {biomeName}",
+                    $"Day/Time: {(DayNightCycle != null ? DayNightCycle.GetTimeString() : "Day")} (Daytime: {DayNightCycle?.TimeOfDay:F1}s)",
+                    $"Mode: {(player.IsFlying ? "Creative Flying" : "Survival Walking")} | HP: {(int)MathF.Ceiling(player.Health)}/{(int)player.MaxHealth}",
+                    $"Render Distance: {renderDistanceChunks} chunks | FOV: {(int)FieldOfView}"
+                };
+
+                float debugX = 16f;
+                float debugY = 16f;
+                float lineHeight = 18f;
+                float maxW = 0f;
+                float textScale = 0.9f;
+
+                foreach (var line in debugLines)
+                {
+                    Vector2 sz = renderer.MeasureText(line, textScale);
+                    if (sz.X > maxW) maxW = sz.X;
+                }
+
+                float totalH = debugLines.Count * lineHeight + 8f;
+                renderer.DrawPanel(debugX - 6f, debugY - 4f, maxW + 16f, totalH,
+                    new Vector4(0.06f, 0.08f, 0.10f, 0.85f),
+                    new Vector4(0.28f, 0.35f, 0.45f, 0.70f), 1.0f);
+
+                for (int i = 0; i < debugLines.Count; i++)
+                {
+                    Vector4 col = (i == 0) ? new Vector4(0.95f, 0.85f, 0.35f, 1f) : new Vector4(0.92f, 0.94f, 0.96f, 0.95f);
+                    renderer.DrawText(debugLines[i], debugX, debugY + i * lineHeight, textScale, col, shadow: true);
+                }
+            }
+            else
+            {
+                // Sleek, minimal coordinates badge (top-left)
+                string coordStr = $"XYZ: {blockX}, {blockY}, {blockZ}  |  {facing} ({axisDesc})  |  {biomeName}";
+                float badgeScale = 0.95f;
+                Vector2 badgeSz = renderer.MeasureText(coordStr, badgeScale);
+                float badgeX = 16f;
+                float badgeY = 16f;
+
+                renderer.DrawPanel(badgeX - 8f, badgeY - 4f, badgeSz.X + 16f, badgeSz.Y + 8f,
+                    new Vector4(0.08f, 0.09f, 0.12f, 0.75f),
+                    new Vector4(0.28f, 0.32f, 0.40f, 0.65f), 1.0f);
+
+                renderer.DrawText(coordStr, badgeX, badgeY, badgeScale, new Vector4(0.95f, 0.95f, 0.95f, 0.95f), shadow: true);
             }
         }
 

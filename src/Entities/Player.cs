@@ -740,16 +740,20 @@ namespace VelmoraCraft.src.Entities
             TargetedMinecart = null;
             float closestDist = hit.HasHit ? hit.Distance : 5.5f;
 
-            foreach (var cart in world.Minecarts)
+            lock (world.Minecarts)
             {
-                if (!cart.IsAlive || cart == CurrentMinecart) continue;
-
-                if (cart.GetAABB().IntersectsRay(Camera.Position, Camera.Forward, 5.5f, out float cartDist))
+                for (int i = 0; i < world.Minecarts.Count; i++)
                 {
-                    if (cartDist < closestDist)
+                    var cart = world.Minecarts[i];
+                    if (cart == null || !cart.IsAlive || cart == CurrentMinecart) continue;
+
+                    if (cart.GetAABB().IntersectsRay(Camera.Position, Camera.Forward, 5.5f, out float cartDist))
                     {
-                        closestDist = cartDist;
-                        TargetedMinecart = cart;
+                        if (cartDist < closestDist)
+                        {
+                            closestDist = cartDist;
+                            TargetedMinecart = cart;
+                        }
                     }
                 }
             }
@@ -765,7 +769,10 @@ namespace VelmoraCraft.src.Entities
                 if (mouse.IsButtonDown(MouseButton.Left) && !IsRiding)
                 {
                     TargetedMinecart.IsAlive = false;
-                    world.Minecarts.Remove(TargetedMinecart);
+                    lock (world.Minecarts)
+                    {
+                        world.Minecarts.Remove(TargetedMinecart);
+                    }
                     DroppedItems.Add(new ItemDrop(BlockType.MinecartItem, TargetedMinecart.Position + new Vector3(0, 0.2f, 0)));
                     TargetedMinecart = null;
                     return;
@@ -812,6 +819,16 @@ namespace VelmoraCraft.src.Entities
                         AudioManager?.PlayBlockBreakSound(def.Type);
 
                         BlockType dropType = def.Type;
+
+                        // Authentic drops: mining Stone yields Cobblestone, CoalOre yields Coal
+                        if (def.Type == BlockType.Stone)
+                        {
+                            dropType = BlockType.Cobblestone;
+                        }
+                        else if (def.Type == BlockType.CoalOre)
+                        {
+                            dropType = BlockType.Coal;
+                        }
 
                         // Normalize drops and clean paired blocks
                         if (def.Type == BlockType.DoorLower || def.Type == BlockType.DoorLowerOpen)
@@ -885,9 +902,20 @@ namespace VelmoraCraft.src.Entities
                             }
                         }
 
-                        if (def.Type == BlockType.Leaves || def.Type == BlockType.SpruceLeaves)
+                        if (def.Type == BlockType.Log || def.Type == BlockType.BirchLog || def.Type == BlockType.SpruceLog)
                         {
-                            // Leaves have a ~20% chance to drop Oak Sapling when broken
+                            world.TriggerTreeLeafDecay(bp);
+                            DroppedItems.Add(new ItemDrop(dropType, new Vector3(bp.X, bp.Y, bp.Z)));
+                        }
+                        else if (def.Type == BlockType.OakSapling)
+                        {
+                            world.GrowingSaplings.TryRemove(bp, out _);
+                            DroppedItems.Add(new ItemDrop(BlockType.OakSapling, new Vector3(bp.X, bp.Y, bp.Z)));
+                        }
+                        else if (def.Type == BlockType.Leaves || def.Type == BlockType.SpruceLeaves)
+                        {
+                            world.PendingDecayingLeaves.TryRemove(bp, out _);
+                            // Leaves have a ~20% chance to drop Oak Sapling when broken by hand
                             if (Random.Shared.Next(100) < 20)
                             {
                                 DroppedItems.Add(new ItemDrop(BlockType.OakSapling, new Vector3(bp.X, bp.Y, bp.Z)));
@@ -895,16 +923,22 @@ namespace VelmoraCraft.src.Entities
                         }
                         else if (def.Type == BlockType.TallGrass)
                         {
-                            // Tall grass has a ~60% chance to drop Wheat Seeds when broken
-                            if (Random.Shared.Next(100) < 60)
+                            // Tall grass has a ~60% chance to drop Wheat Seeds and ~20% chance to drop plant fibers/Cobwebs
+                            int roll = Random.Shared.Next(100);
+                            if (roll < 60)
                             {
                                 DroppedItems.Add(new ItemDrop(BlockType.WheatSeeds, new Vector3(bp.X, bp.Y, bp.Z)));
+                            }
+                            if (roll < 20)
+                            {
+                                DroppedItems.Add(new ItemDrop(BlockType.Cobweb, new Vector3(bp.X, bp.Y, bp.Z)));
                             }
                         }
                         else if (def.Type == BlockType.Wheat)
                         {
                             byte stage = world.GetBlockMetadata(bp.X, bp.Y, bp.Z);
                             world.GrowingCrops.Remove(bp);
+                            world.CropStageTimers.TryRemove(bp, out _);
                             if (stage >= 7)
                             {
                                 // Fully grown wheat drops harvested Wheat item + 1-2 Wheat Seeds
@@ -982,7 +1016,10 @@ namespace VelmoraCraft.src.Entities
                     if (b == (byte)BlockType.Rail || b == (byte)BlockType.PoweredRail || b == (byte)BlockType.PoweredRailOn)
                     {
                         var cart = new Minecart(new Vector3(bp.X, bp.Y + 0.1f, bp.Z));
-                        world.Minecarts.Add(cart);
+                        lock (world.Minecarts)
+                        {
+                            world.Minecarts.Add(cart);
+                        }
                         Inventory.Slots[SelectedHotbarSlot].Count--;
                         if (Inventory.Slots[SelectedHotbarSlot].Count <= 0)
                         {
@@ -1195,6 +1232,7 @@ namespace VelmoraCraft.src.Entities
                             world.SetBlockWorld(plantPos.X, plantPos.Y, plantPos.Z, BlockType.Wheat);
                             world.SetBlockMetadata(plantPos.X, plantPos.Y, plantPos.Z, 0); // Stage 0
                             world.GrowingCrops.Add(plantPos);
+                            world.CropStageTimers[plantPos] = 25.0f + Random.Shared.NextSingle() * 10.0f;
                             AudioManager?.PlayBlockPlaceSound(BlockType.Grass);
                             Inventory.Slots[SelectedHotbarSlot].Count--;
                             if (Inventory.Slots[SelectedHotbarSlot].Count <= 0)
@@ -1359,6 +1397,19 @@ namespace VelmoraCraft.src.Entities
                                     {
                                         toPlace = BlockType.Wheat;
                                         world.GrowingCrops.Add(pb);
+                                        world.CropStageTimers[pb] = 25.0f + Random.Shared.NextSingle() * 10.0f;
+                                    }
+                                }
+                                else if (toPlace == BlockType.OakSapling)
+                                {
+                                    byte under = world.GetBlockWorld(pb.X, pb.Y - 1, pb.Z);
+                                    if (under != (byte)BlockType.Grass && under != (byte)BlockType.Dirt && under != (byte)BlockType.SnowyGrass)
+                                    {
+                                        canPlace = false;
+                                    }
+                                    else
+                                    {
+                                        world.RegisterGrowingSapling(pb);
                                     }
                                 }
 

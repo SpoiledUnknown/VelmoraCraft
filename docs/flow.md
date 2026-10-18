@@ -1,6 +1,6 @@
-# VelmoraCraft — Execution & System Flow
+# VelmoraCraft — System Execution & Architectural Flow
 
-This document outlines the complete architectural flow of the program, detailing the lifecycle from application startup to scene management, asynchronous terrain streaming, physics, multi-pass rendering, ecosystem simulations, and shutdown.
+This document details the complete end-to-end execution flow of the VelmoraCraft engine, tracing every lifecycle stage from process launch, scene state transitions, multithreaded terrain generation, and living ecosystem simulation, to multi-pass rendering, input handling, and shutdown.
 
 ---
 
@@ -16,17 +16,17 @@ flowchart TD
 
     subgraph GameLoop["Per-Frame Game Loop"]
         direction TB
-        Input["Process Input & Window Events"] --> SceneBranch{"Current SceneState"}
+        Input["Process Input & Window Events\n(F1 HUD, F3 Debug, F11 Fullscreen, E Inv, Hotbar)"] --> SceneBranch{"Current SceneState"}
         SceneBranch -->|MainMenu| MenuUpdate["Orbit Menu Camera & Draw Main Menu"]
-        SceneBranch -->|InGame| InGameUpdate["Update Physics, Survival, Entities & Streaming"]
+        SceneBranch -->|InGame| InGameUpdate["Update Physics, Survival, Entities, Raycast & Streaming"]
         SceneBranch -->|VictoryScreen| VictoryUpdate["Break Nearby Portals & Draw Victory Screen"]
-        InGameUpdate --> Simulations["Run Living Ecosystem (Fluids, Crops, Grass Spread, Nocturnal Cobwebs)"]
-        Simulations --> GPUUpload["Upload Ready Meshes (Max 6/frame)"]
-        GPUUpload --> RenderPasses["Render Frame (Sky, Opaque, Water, Entities, Custom UI)"]
-        RenderPasses --> Swap["Swap Buffers"]
+        InGameUpdate --> Simulations["Run Living Ecosystem\n(Fluids, Crops, Leaf Decay, Saplings, Grass Spread, Cobwebs)"]
+        Simulations --> GPUUpload["Upload Ready Meshes (Max 6/frame)\n& Drain Spawned Minecarts"]
+        GPUUpload --> RenderPasses["Render Multi-Pass Frame\n(Sky, Opaque, Translucent Fluids, Minecarts, 2D HUD / F3 Screen)"]
+        RenderPasses --> Swap["Swap Buffers (Present)"]
     end
 
-    GameLoop --> Shutdown["Window Close & Cleanup"]
+    GameLoop --> Shutdown["Window Close & Resource Cleanup"]
 ```
 
 ---
@@ -34,7 +34,7 @@ flowchart TD
 ## 2. Program Startup & Scene Flow
 
 1. **Entrypoint (`Program.cs`)**:
-   * Creates the `Game` window configuration (resolution, title: *VelmoraCraft*, OpenGL 3.3 Core profile).
+   * Creates the `Game` window configuration (native resolution, title: *VelmoraCraft*, OpenGL 3.3 Core profile).
    * Launches `game.Run()`.
 
 2. **Initialization (`Game.OnLoad`)**:
@@ -60,17 +60,34 @@ flowchart TD
 
 ---
 
-## 3. Asynchronous Chunk Streaming Flow
+## 3. Asynchronous Chunk Streaming & Structure Generation Pipeline
 
-The chunk lifecycle is managed asynchronously across background threads and synchronized onto the main thread for GPU upload:
+```mermaid
+flowchart TD
+    A["Player Movement / Chunk Ingestion"] --> B{"Is Chunk in Memory?"}
+    B -- No --> C["Enqueue Chunk to Worker Queue"]
+    C --> D["Worker Threads (WorkerLoop)"]
+    D --> E["Terrain Generation (Simplex Elevation & 3D Caves)"]
+    E --> F["Apply Saved Block Modifications"]
+    F --> G["Ensure 4 Cardinal Neighbor Chunks Generated"]
+    G --> H["DecorateChunk (Ores, Foliage, Trees, Flora)"]
+    H --> I["DecorateChunkStructures (Region-Grid Candidate Check)"]
+    I --> J["Generate Villages, Surface Railway, Ruins, Desert Wells, Mountain Camps, Mineshafts"]
+    J --> K["Build Interleaved Chunk Mesh via ArrayPool"]
+    K --> L["Upload Mesh to GPU on Main Thread (Max 6/frame)"]
+    L --> M["Frustum & Distance Culling"]
+    M --> N["Render Opaque & Translucent Passes"]
+```
 
+### Worker Lifecycle State Diagram:
 ```mermaid
 stateDiagram-v2
     [*] --> Queued: Player moves near ungenerated chunk
     Queued --> GeneratingTerrain: Worker Thread dequeues
     GeneratingTerrain --> WaitingNeighbors: Generate 3D simplex noise
     WaitingNeighbors --> Decorating: Check/generate 4 adjacent chunks
-    Decorating --> Meshing: Place trees, flora, structures
+    Decorating --> StructureGen: Place ores, trees & flora
+    StructureGen --> Meshing: Check region-grid & build structures
     Meshing --> ReadyToUpload: Build ChunkVertex mesh via ArrayPool
     ReadyToUpload --> UploadedToGPU: Main thread uploads (budgeted 6/frame)
     UploadedToGPU --> Rendered: Frustum & distance test passed
@@ -85,7 +102,7 @@ stateDiagram-v2
    * Dequeue chunk coordinate from `workQueue`.
    * Throttles execution if `readyToUploadMeshes.Count >= 24` to prevent memory backlogs.
    * Generate 3D noise terrain for center and adjacent 4 neighbor chunks.
-   * Apply decorations (trees, flora, structures).
+   * Apply decorations (ores, trees, flora) and structures (villages, railways, desert wells, camps, ruins, mineshafts). Newly spawned entities like minecarts are queued to `pendingSpawnedMinecarts`.
    * Execute `ChunkMesher.BuildMesh()` renting arrays from `ArrayPool<T>.Shared`.
    * Push completed `ChunkMesh` to `readyToUploadMeshes` concurrent queue.
 3. **Main Thread GPU Upload (`World.Update`)**:
@@ -103,14 +120,20 @@ Executed once per frame prior to rendering:
 ```
 OnUpdateFrame(FrameEventArgs e)
  ├── 1. Process Window / Input State
- │    ├── Handle ESC (Toggle Pause Menu)
- │    ├── Hotbar slot selection (1-9 or Scroll Wheel)
- │    └── Mouse capture & camera orientation
+ │    ├── ESC: Toggle Pause Menu or close interactive stations
+ │    ├── F1: Toggle HUD Visibility
+ │    ├── F3: Toggle Minecraft-style Diagnostics & Coordinates Overlay
+ │    ├── F11: Toggle Fullscreen Display
+ │    ├── E: Open Personal Inventory & 2x2 Crafting
+ │    ├── Hotbar slot selection (Keys 1-9 or Scroll Wheel)
+ │    └── Mouse capture & camera look orientation (Yaw / Pitch)
  ├── 2. Living Ecosystem Simulations:
  │    ├── Fluid Simulation (FluidSystem.Update): propagate water and lava flow (limit: 8 blocks)
- │    ├── Crop Growth (Wheat stages 0..7 advance based on random tick)
- │    ├── Dirt-to-Grass Spread: countdown timers convert eligible dirt to grass after 1-2 in-game days
- │    └── Nocturnal Cobweb Spawning: trees in loaded chunks spawn atmospheric cobwebs under leaf canopies at night
+ │    ├── Leaf Decay Simulation: orphaned leaves disappear in 1 to 2 in-game minutes with sapling drops
+ │    ├── Crop Growth Simulation: wheat advances across 7 stages to maturity in 3 to 4 in-game minutes
+ │    ├── Tree Sapling Growth: planted saplings grow into full trees in 5 to 6 in-game minutes
+ │    ├── Dirt-to-Grass Spread: countdown timers convert surface dirt to grass in 2 to 3 in-game minutes
+ │    └── Nocturnal Cobweb Spawning: trees in loaded chunks periodically spawn cobwebs at night
  ├── 3. Player Update (Player.Update)
  │    ├── Swept AABB Physics (Move along X, Y, Z with step-assist)
  │    ├── Directional Block & Door Placement (Calculates facing from Camera.Forward)
@@ -122,7 +145,8 @@ OnUpdateFrame(FrameEventArgs e)
  │         ├── Check body contact with lava for fire damage
  │         └── Passive health regeneration (after 10s without damage)
  └── 4. World Update (World.Update)
-      ├── Upload ready chunk meshes to GPU & dispose pooled arrays
+      ├── Drain pendingSpawnedMinecarts into active Minecarts list under lock
+      ├── Upload ready chunk meshes to GPU & dispose pooled arrays (budget: 6/frame)
       ├── Stream surrounding chunks based on camera position
       └── Update dynamic entities (minecarts)
 ```
@@ -131,44 +155,66 @@ OnUpdateFrame(FrameEventArgs e)
 
 ## 5. Main Loop: Render Flow (`OnRenderFrame`)
 
-The render pipeline uses a multi-pass approach to ensure correct lighting and transparency sorting:
+The render pipeline uses a multi-pass approach to ensure correct lighting, transparency sorting, and UI layering:
 
 ```mermaid
 flowchart TD
     Clear["Clear Color & Depth Buffers"] --> Sky["Pass 0: Render Dynamic Skybox\n(Sun, Moon, Moving Clouds, Day/Night Tint)"]
-    Sky --> Opaque["Pass 1: Render Opaque Terrain\n(DepthMask = ON, Blend = OFF, Dynamic Fog)"]
-    Opaque --> Water["Pass 2: Render Translucent Water & Portals\n(DepthMask = OFF, Blend = ON)"]
-    Water --> Entities["Pass 3: Render Entities & Minecarts"]
-    Entities --> UI["Pass 4: Render 2D UI & HUD via UIRenderer\n(Health & Oxygen, Hotbar, Crosshair, Menus)"]
+    Sky --> Opaque["Pass 1: Render Opaque Terrain\n(DepthMask = ON, Blend = OFF, Dynamic Fog, Shader Light Uniforms)"]
+    Opaque --> Water["Pass 2: Render Translucent Water & Portals\n(DepthMask = OFF, Blend = ON, Wave Displacements)"]
+    Water --> Entities["Pass 3: Render Entities & Minecarts\n(Thread-Safe Indexed Loop with Matching Shader)"]
+    Entities --> UI["Pass 4: Render 2D UI & HUD via UIRenderer\n(Health, Stamina, Oxygen, Hotbar, Coordinates Badge, F3 Debug Overlay, Menus)"]
     UI --> Present["Swap Buffers (Present to Screen)"]
 ```
 
 ### Detailed Render Passes:
 1. **Pass 0: Skybox (`SkyRenderer.Render`)**:
    * Renders celestial hemisphere with dynamic sun, moon, stars, and procedural moving clouds.
-   * Updates atmospheric sky tint and distance fog parameters according to the current render distance.
+   * Updates atmospheric sky tint and distance fog parameters according to current render distance and time of day.
 2. **Pass 1: Opaque Terrain (`World.Render` - Pass 1)**:
    * Sets `isTranslucentPass = 0`, `DepthMask = true`, `Blend = false`.
    * Frustum-culls chunks outside camera field of view.
+   * Queries active point lights (up to 15) within 48 blocks and uploads them to shader uniform arrays.
    * Draws opaque geometry (stone, dirt, wood, leaves, directional doors, etc.).
    * Solid surfaces under water are written to depth buffer first.
 3. **Pass 2: Translucent Surfaces (`World.Render` - Pass 2)**:
    * Sets `isTranslucentPass = 1`, `DepthMask = false`, `Blend = true` (`GL.BlendFunc(SrcAlpha, OneMinusSrcAlpha)`).
-   * Renders water and portal quads smoothly blended over opaque geometry without clipping.
+   * Renders water, ice, and portal quads smoothly blended over opaque geometry.
+   * Applies vertex wave displacement and texture frame animations in shader.
 4. **Pass 3: Entities (`MinecartRenderer.Render`)**:
-   * Renders active minecart models with matching lighting and texture atlas.
+   * Renders active minecart models under thread-safe list lock with matching lighting and texture atlas.
 5. **Pass 4: User Interface (`UIManager.Render` & `UIRenderer`)**:
    * Renders custom OpenGL 2D overlays:
-     * Interactive Health, Oxygen, and Hotbar status indicators.
-     * Reticle crosshair and hand-held item rendering.
-     * Full interactive screens: Inventory, Crafting Table (3x3), Furnace (smelting), Chest / Double-Chest, Pause Menu with persistent sliders, and Victory Screen.
+     * Interactive Health, Oxygen, Stamina, and Hotbar status indicators.
+     * Reticle crosshair and hand-held item rendering with bobbing animation.
+     * Compact HUD Coordinates Badge (always visible in top-left).
+     * Toggleable `F3` Debug Diagnostics screen with sub-block coordinates, chunk coordinates, facing direction, biome name, and engine metrics.
+     * Full interactive screens: Inventory (2x2), Crafting Table (3x3), Furnace (smelting), Chest / Double-Chest, Pause Menu with persistent sliders, and Victory Screen.
 
 ---
 
-## 6. Shutdown & Disposal Flow
+## 6. Save & Load Architecture
+
+```mermaid
+flowchart LR
+    A["In-Game Save Trigger\n(ESC Menu / Auto-Save)"] --> B["SaveSystem.SaveWorld"]
+    B --> C["Serialize Player State\n(XYZ, Rotation, Health, Oxygen, Stamina)"]
+    B --> D["Serialize Delta Modified Blocks\n& Metadata (Orientations)"]
+    B --> E["Serialize Chest & Station Inventories"]
+    B --> F["Serialize Active Ecosystem Timers\n(Crops, Saplings, Decaying Leaves, Dirt Spread)"]
+    B --> G["Serialize Day/Night Time & Options"]
+    G --> H["Write atomic JSON to saves/world_{seed}.json"]
+```
+
+* **Instant Restoration**: During world load, modified blocks are loaded into memory *before* chunks generate, ensuring user modifications appear on screen instantly without popping or delay.
+* **Delta Serialization**: Unmodified chunks remain purely procedural; only player-placed, broken, or modified blocks are saved, keeping save files tiny ($< 100\text{ KB}$).
+
+---
+
+## 7. Shutdown & Disposal Flow
 
 When the window closes (`OnUnload` / `Dispose`):
-1. Background worker threads receive cancellation signals and are cleanly joined.
+1. Background worker threads receive cancellation signals via `CancellationTokenSource` and are cleanly joined.
 2. `World.Destroy()` unloads and deletes all OpenGL VBOs and VAOs from GPU memory.
 3. Disposes any pending chunk meshes left in `readyToUploadMeshes` to return rented arrays to `ArrayPool`.
 4. Texture atlas and shader programs are deleted via `GL.DeleteProgram` and `GL.DeleteTexture`.

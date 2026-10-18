@@ -136,6 +136,8 @@ namespace VelmoraCraft.src.UI
             // ==========================================
             // 6. Wool Production & 16 Dyeing Recipes
             // ==========================================
+            Recipes.Add(new CraftingRecipe("White Wool from Wheat", new ItemStack(BlockType.WhiteWool, 1), new[] { (BlockType.Wheat, 4) }, RecipeStation.Personal));
+            Recipes.Add(new CraftingRecipe("Cobweb from Tall Grass", new ItemStack(BlockType.Cobweb, 1), new[] { (BlockType.TallGrass, 2) }, RecipeStation.Personal));
             Recipes.Add(new CraftingRecipe("White Wool", new ItemStack(BlockType.WhiteWool, 1), new[] { (BlockType.Cobweb, 1) }, RecipeStation.Personal));
             Recipes.Add(new CraftingRecipe("White Wool (x4)", new ItemStack(BlockType.WhiteWool, 4), new[] { (BlockType.Cobweb, 4) }, RecipeStation.Personal));
             Recipes.Add(new CraftingRecipe("Cobweb from Wool (x2)", new ItemStack(BlockType.Cobweb, 2), new[] { (BlockType.WhiteWool, 1) }, RecipeStation.Personal));

@@ -48,6 +48,12 @@ namespace VelmoraCraft.src.World
 
         // Pending Dirt to Grass Spreads
         public List<DirtSpreadSaveData> PendingDirtSpreads { get; set; } = new List<DirtSpreadSaveData>();
+
+        // Growing Saplings
+        public List<DirtSpreadSaveData> GrowingSaplings { get; set; } = new List<DirtSpreadSaveData>();
+
+        // Decaying Leaves
+        public List<DirtSpreadSaveData> PendingDecayingLeaves { get; set; } = new List<DirtSpreadSaveData>();
     }
 
     public class DirtSpreadSaveData
@@ -264,6 +270,30 @@ namespace VelmoraCraft.src.World
                     });
                 }
 
+                // Save Growing Saplings
+                foreach (var kvp in world.GrowingSaplings)
+                {
+                    data.GrowingSaplings.Add(new DirtSpreadSaveData
+                    {
+                        X = kvp.Key.X,
+                        Y = kvp.Key.Y,
+                        Z = kvp.Key.Z,
+                        RemainingSeconds = kvp.Value
+                    });
+                }
+
+                // Save Decaying Leaves
+                foreach (var kvp in world.PendingDecayingLeaves)
+                {
+                    data.PendingDecayingLeaves.Add(new DirtSpreadSaveData
+                    {
+                        X = kvp.Key.X,
+                        Y = kvp.Key.Y,
+                        Z = kvp.Key.Z,
+                        RemainingSeconds = kvp.Value
+                    });
+                }
+
                 string json = JsonSerializer.Serialize(data, new JsonSerializerOptions { WriteIndented = true });
                 File.WriteAllText(SaveFilePath, json);
                 Console.WriteLine($"[SaveSystem] World saved successfully ({data.ModifiedBlocks.Count} block changes, {data.Chests.Count} chests, {data.PendingDirtSpreads.Count} grass spreads).");
@@ -335,6 +365,26 @@ namespace VelmoraCraft.src.World
                     {
                         world.CheckAndRegisterDirtForGrassSpread(pos);
                     }
+                }
+            }
+
+            // Restore Growing Saplings
+            world.GrowingSaplings.Clear();
+            if (data.GrowingSaplings != null)
+            {
+                foreach (var gs in data.GrowingSaplings)
+                {
+                    world.GrowingSaplings[new Vector3i(gs.X, gs.Y, gs.Z)] = gs.RemainingSeconds;
+                }
+            }
+
+            // Restore Decaying Leaves
+            world.PendingDecayingLeaves.Clear();
+            if (data.PendingDecayingLeaves != null)
+            {
+                foreach (var dl in data.PendingDecayingLeaves)
+                {
+                    world.PendingDecayingLeaves[new Vector3i(dl.X, dl.Y, dl.Z)] = dl.RemainingSeconds;
                 }
             }
 

@@ -405,7 +405,7 @@ namespace VelmoraCraft.src.World
             Register(CreateUniformBlock(BlockType.MinecartItem, "Minecart", isSolid: false, isTransparent: true, hardness: 0f, new Vector2(6, 0)));
 
             // 7. Nether Portal Block (Translucent, glowing purple endgame rift)
-            Register(CreateUniformBlock(BlockType.Portal, "Nether Portal", isSolid: false, isTransparent: true, hardness: 0f, new Vector2(14, 12), tintColor: new Vector3(0.75f, 0.20f, 0.95f), isLightSource: true));
+            Register(CreateUniformBlock(BlockType.Portal, "Nether Portal", isSolid: false, isTransparent: true, hardness: 0f, new Vector2(14, 12), tintColor: new Vector3(1.35f, 0.40f, 1.65f), isLightSource: true));
 
             // 8. Bed (Foot top at (6,8), Head top at (7,8), Foot End (5,9), Foot Side (6,9), Head End (8,9), Head Side (7,9))
             Register(new BlockDefinition(
@@ -415,7 +415,7 @@ namespace VelmoraCraft.src.World
                 isTransparent: true,
                 hardness: 0.2f,
                 faceUVCoords: new[]
-                {
+                {                                         
                     new Vector2(5, 9), // Front (Foot end)
                     new Vector2(6, 9), // Back (Inner)
                     new Vector2(6, 9), // Left (Side)
@@ -446,7 +446,7 @@ namespace VelmoraCraft.src.World
             // --- Ores & Minerals ---
             Register(CreateUniformBlock(BlockType.GoldOre, "Gold Ore", isSolid: true, isTransparent: false, hardness: 3.0f, new Vector2(0, 2)));
             Register(CreateUniformBlock(BlockType.DiamondOre, "Diamond Ore", isSolid: true, isTransparent: false, hardness: 3.5f, new Vector2(2, 3)));
-            Register(CreateUniformBlock(BlockType.RedstoneOre, "Redstone Ore", isSolid: true, isTransparent: false, hardness: 3.0f, new Vector2(3, 3), isLightSource: true));
+            Register(CreateUniformBlock(BlockType.RedstoneOre, "Redstone Ore", isSolid: true, isTransparent: false, hardness: 3.0f, new Vector2(3, 3)));
             Register(CreateUniformBlock(BlockType.LapisOre, "Lapis Lazuli Ore", isSolid: true, isTransparent: false, hardness: 3.0f, new Vector2(0, 10)));
             Register(CreateUniformBlock(BlockType.GoldBlock, "Block of Gold", isSolid: true, isTransparent: false, hardness: 3.0f, new Vector2(7, 1)));
             Register(CreateUniformBlock(BlockType.IronBlock, "Block of Iron", isSolid: true, isTransparent: false, hardness: 5.0f, new Vector2(6, 1)));
@@ -523,7 +523,7 @@ namespace VelmoraCraft.src.World
             Register(CreateUniformBlock(BlockType.GreenWool, "Green Wool", isSolid: true, isTransparent: false, hardness: 0.8f, new Vector2(1, 10)));
             Register(CreateUniformBlock(BlockType.RedWool, "Red Wool", isSolid: true, isTransparent: false, hardness: 0.8f, new Vector2(1, 9)));
             Register(CreateUniformBlock(BlockType.BlackWool, "Black Wool", isSolid: true, isTransparent: false, hardness: 0.8f, new Vector2(1, 8)));
-            Register(CreateUniformBlock(BlockType.RedstoneBlock, "Block of Redstone", isSolid: true, isTransparent: false, hardness: 5.0f, new Vector2(8, 1), tintColor: new Vector3(0.95f, 0.15f, 0.15f), isLightSource: true));
+            Register(CreateUniformBlock(BlockType.RedstoneBlock, "Block of Redstone", isSolid: true, isTransparent: false, hardness: 5.0f, new Vector2(8, 1), tintColor: new Vector3(0.95f, 0.15f, 0.15f)));
             Register(CreateUniformBlock(BlockType.CoalBlock, "Block of Coal", isSolid: true, isTransparent: false, hardness: 5.0f, new Vector2(6, 1), tintColor: new Vector3(0.12f, 0.12f, 0.12f)));
         }
 

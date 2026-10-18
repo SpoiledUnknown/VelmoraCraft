@@ -86,6 +86,7 @@ namespace VelmoraCraft
         private readonly int[] uPointLightCol = new int[16];
         private readonly int[] uPointLightRad = new int[16];
         private readonly int[] uPointLightInt = new int[16];
+        private readonly List<(Vector3 Position, Vector3 Color, float Radius, float Intensity)> framePointLights = new List<(Vector3, Vector3, float, float)>(16);
 
         private int width;
         private int height;
@@ -254,6 +255,7 @@ namespace VelmoraCraft
             Vector3 spawnPos = new Vector3(initCenter + 0.5f, spawnY + 2.5f, initCenter + 0.5f);
             camera = new Camera(width, height, spawnPos);
             player = new Player(spawnPos, camera);
+            if (world != null) world.PlayerRef = player;
             if (savedSettings != null)
             {
                 player.IsFlying = savedSettings.IsFlying;
@@ -277,6 +279,7 @@ namespace VelmoraCraft
             world = new World(seed, worldSize);
             world.TranslucentPassUniformLoc = uIsTranslucentPass;
             world.DayNightCycle = dayNightCycle;
+            world.ChestManager = chestManager;
 
             chestManager?.Clear();
             totalPlayTime = 0f;
@@ -288,6 +291,7 @@ namespace VelmoraCraft
 
             camera = new Camera(width, height, spawnPos);
             player = new Player(spawnPos, camera);
+            if (world != null) world.PlayerRef = player;
             var currentSettings = SaveSystem.LoadSettings();
             if (currentSettings != null)
             {
@@ -344,6 +348,7 @@ namespace VelmoraCraft
             world = new World(data.Seed, data.WorldChunks, new Vector2i(playerChunkX, playerChunkZ), data.ModifiedBlocks);
             world.TranslucentPassUniformLoc = uIsTranslucentPass;
             world.DayNightCycle = dayNightCycle;
+            world.ChestManager = chestManager;
 
             chestManager?.Clear();
 
@@ -354,9 +359,10 @@ namespace VelmoraCraft
             camera.UpdateVectors();
 
             player = new Player(initialPos, camera);
+            if (world != null) world.PlayerRef = player;
             SetupPlayerCallbacks(player);
 
-            SaveSystem.ApplyLoadedData(data, world, player, dayNightCycle!, chestManager,
+            SaveSystem.ApplyLoadedData(data, world!, player, dayNightCycle!, chestManager,
                 uiManager: uiManager,
                 setFullscreen: fs => WindowState = fs ? WindowState.Fullscreen : WindowState.Normal);
             totalPlayTime = data.PlayTimeSeconds;
@@ -569,21 +575,52 @@ namespace VelmoraCraft
             GL.Uniform3f(uAmbientColor, 1, ref ambientColor);
             GL.Uniform1f(uLightIntensity, lightIntensity);
 
-            // Dynamic Point Lights (Placed Torches, Lava, Handheld Torch)
-            var pointLights = world?.GetActivePointLights(activeCam.Position, maxCount: 15, dt)
-                ?? new List<(Vector3, Vector3, float, float)>();
+            // Dynamic Point Lights (Placed Torches, Lava, Handheld Torch, Redstone Torch, Lanterns, Glowstone)
+            framePointLights.Clear();
 
-            if (currentScene == SceneState.InGame && player != null && player.SelectedPlacementBlock == BlockType.Torch)
+            // 1. Handheld dynamic point light when equipped/selected in hotbar
+            if (currentScene == SceneState.InGame && player != null)
             {
-                pointLights.Insert(0, (camera!.Position, new Vector3(1.0f, 0.72f, 0.38f), 16.0f, 1.4f));
+                BlockType held = player.SelectedPlacementBlock;
+                if (held == BlockType.Torch)
+                {
+                    Vector3 torchPos = camera!.Position + camera.Forward * 0.35f - camera.Up * 0.15f;
+                    framePointLights.Add((torchPos, new Vector3(1.0f, 0.74f, 0.40f), 16.0f, 1.4f));
+                }
+                else if (held == BlockType.RedstoneTorch)
+                {
+                    Vector3 torchPos = camera!.Position + camera.Forward * 0.35f - camera.Up * 0.15f;
+                    framePointLights.Add((torchPos, new Vector3(1.0f, 0.20f, 0.15f), 12.0f, 1.2f));
+                }
+                else if (held == BlockType.JackOLantern)
+                {
+                    Vector3 torchPos = camera!.Position + camera.Forward * 0.35f - camera.Up * 0.15f;
+                    framePointLights.Add((torchPos, new Vector3(1.0f, 0.65f, 0.20f), 15.0f, 1.4f));
+                }
+                else if (held == BlockType.Glowstone)
+                {
+                    Vector3 torchPos = camera!.Position + camera.Forward * 0.35f - camera.Up * 0.15f;
+                    framePointLights.Add((torchPos, new Vector3(1.0f, 0.92f, 0.60f), 15.0f, 1.4f));
+                }
             }
 
-            int count = Math.Min(16, pointLights.Count);
+            // 2. Add placed world point lights up to max limit (16 total)
+            int maxWorldLights = 16 - framePointLights.Count;
+            if (world != null && maxWorldLights > 0)
+            {
+                var worldLights = world.GetActivePointLights(activeCam.Position, maxCount: maxWorldLights, dt);
+                for (int i = 0; i < worldLights.Count && framePointLights.Count < 16; i++)
+                {
+                    framePointLights.Add(worldLights[i]);
+                }
+            }
+
+            int count = framePointLights.Count;
             GL.Uniform1i(uNumPointLights, count);
 
             for (int i = 0; i < count; i++)
             {
-                var light = pointLights[i];
+                var light = framePointLights[i];
                 Vector3 pos = light.Position;
                 Vector3 col = light.Color;
                 GL.Uniform3f(uPointLightPos[i], 1, ref pos);

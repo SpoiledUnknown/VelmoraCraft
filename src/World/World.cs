@@ -30,10 +30,17 @@ namespace VelmoraCraft.src.World
         private readonly WorldGenerator generator;
         private readonly ConcurrentDictionary<Vector2i, Chunk> chunks = new ConcurrentDictionary<Vector2i, Chunk>();
         public readonly List<Minecart> Minecarts = new List<Minecart>();
+        private readonly ConcurrentQueue<Minecart> pendingSpawnedMinecarts = new ConcurrentQueue<Minecart>();
+
+        public void SpawnMinecart(Minecart cart)
+        {
+            pendingSpawnedMinecarts.Enqueue(cart);
+        }
         private readonly ConcurrentDictionary<Vector3i, byte> lightSources = new ConcurrentDictionary<Vector3i, byte>();
         public readonly ConcurrentDictionary<Vector3i, BlockType> ModifiedBlocks = new ConcurrentDictionary<Vector3i, BlockType>();
         public readonly ConcurrentDictionary<Vector3i, byte> BlockMetadataMap = new ConcurrentDictionary<Vector3i, byte>();
         public readonly FluidSystem FluidSystem = new FluidSystem();
+        public UI.ChestManager? ChestManager { get; set; }
 
         // Thread-safe queues for multithreaded terrain generation and meshing
         private readonly ConcurrentQueue<Vector2i> workQueue = new ConcurrentQueue<Vector2i>();
@@ -62,14 +69,25 @@ namespace VelmoraCraft.src.World
         private float streamTimer = 0f;
         private Vector2i lastStreamedChunk = new Vector2i(-9999, -9999);
 
-        // Farming and crop simulation
+        // Player reference for dropped items and interactions
+        public Entities.Player? PlayerRef { get; set; }
+
+        // Farming and crop simulation (takes 3 to 4 in-game minutes from seed to mature wheat)
         public readonly HashSet<Vector3i> GrowingCrops = new HashSet<Vector3i>();
+        public readonly ConcurrentDictionary<Vector3i, float> CropStageTimers = new ConcurrentDictionary<Vector3i, float>();
         private float cropGrowthTimer = 0f;
 
-        // Configurable grass spread parameters (dirt turns to grass after 1-2 in-game days when near grass)
-        public static float GrassSpreadMinDays = 1.0f;
-        public static float GrassSpreadMaxDays = 2.0f;
-        public static float InGameDaySeconds = DayNightCycle.TOTAL_CYCLE_DURATION; // 1200.0f (20 mins)
+        // Tree sapling growth simulation (takes 5 to 6 in-game minutes)
+        public readonly ConcurrentDictionary<Vector3i, float> GrowingSaplings = new ConcurrentDictionary<Vector3i, float>();
+        private float saplingGrowthTimer = 0f;
+
+        // Leaf decay simulation (leaves disappear after 1 to 2 in-game minutes when tree logs are mined)
+        public readonly ConcurrentDictionary<Vector3i, float> PendingDecayingLeaves = new ConcurrentDictionary<Vector3i, float>();
+        private float leafDecayTimer = 0f;
+
+        // Configurable grass spread parameters (dirt turns to grass after 2-3 in-game minutes when near grass)
+        public static float GrassSpreadMinSeconds = 120.0f; // 2 minutes
+        public static float GrassSpreadMaxSeconds = 180.0f; // 3 minutes
 
         public readonly ConcurrentDictionary<Vector3i, float> PendingDirtGrassSpread = new ConcurrentDictionary<Vector3i, float>();
         private float dirtSpreadTimer = 0f;
@@ -138,6 +156,7 @@ namespace VelmoraCraft.src.World
                             generator.DecorateChunk(this, chunk);
                             ApplyModifiedBlocksToChunk(chunk);
                             chunk.IsDecorated = true;
+                            ScanChunkLightSources(chunk);
                         }
                     }
                 }
@@ -220,6 +239,11 @@ namespace VelmoraCraft.src.World
             return wx >= 0 && wx < WORLD_SIZE_X && wz >= 0 && wz < WORLD_SIZE_Z;
         }
 
+        public BiomeType GetBiome(int wx, int wz)
+        {
+            return generator.GetBiome(wx, wz);
+        }
+
         public int GetSurfaceHeight(int wx, int wz)
         {
             if (!IsInsideWorld(wx, wz)) return 64;
@@ -283,7 +307,11 @@ namespace VelmoraCraft.src.World
                 if (BlockRegistry.Get(oldBlock).IsLightSource)
                 {
                     lightSources.TryRemove(pos, out _);
-                    chunk.LightPositions.Remove(pos);
+                    lock (chunk.LightPositions)
+                    {
+                        chunk.LightPositions.Remove(pos);
+                    }
+                    lightQueryTimer = 999f;
                 }
 
                 chunk.SetBlock(lx, wy, lz, type);
@@ -310,10 +338,14 @@ namespace VelmoraCraft.src.World
                 if (BlockRegistry.Get(type).IsLightSource)
                 {
                     lightSources.TryAdd(pos, 0);
-                    if (!chunk.LightPositions.Contains(pos))
+                    lock (chunk.LightPositions)
                     {
-                        chunk.LightPositions.Add(pos);
+                        if (!chunk.LightPositions.Contains(pos))
+                        {
+                            chunk.LightPositions.Add(pos);
+                        }
                     }
+                    lightQueryTimer = 999f;
                 }
 
                 if (type == BlockType.Dirt)
@@ -376,9 +408,64 @@ namespace VelmoraCraft.src.World
             {
                 if (!PendingDirtGrassSpread.ContainsKey(pos))
                 {
-                    float days = GrassSpreadMinDays + Random.Shared.NextSingle() * (GrassSpreadMaxDays - GrassSpreadMinDays);
-                    float durationSeconds = days * InGameDaySeconds;
+                    // Fast-forwarded: 2 to 3 in-game minutes (120 to 180 seconds)
+                    float durationSeconds = GrassSpreadMinSeconds + Random.Shared.NextSingle() * (GrassSpreadMaxSeconds - GrassSpreadMinSeconds);
                     PendingDirtGrassSpread[pos] = durationSeconds;
+                }
+            }
+        }
+
+        public void RegisterGrowingSapling(Vector3i pos)
+        {
+            // Trees take 5 to 6 in-game minutes to grow (300 to 360 seconds)
+            float growthTime = 300.0f + Random.Shared.NextSingle() * 60.0f;
+            GrowingSaplings[pos] = growthTime;
+        }
+
+        public bool HasLogWithin(Vector3i leafPos, int maxDist)
+        {
+            for (int dy = -maxDist; dy <= maxDist; dy++)
+            {
+                for (int dx = -maxDist; dx <= maxDist; dx++)
+                {
+                    for (int dz = -maxDist; dz <= maxDist; dz++)
+                    {
+                        if (Math.Abs(dx) + Math.Abs(dy) + Math.Abs(dz) > maxDist * 1.5f) continue;
+                        byte b = GetBlockWorld(leafPos.X + dx, leafPos.Y + dy, leafPos.Z + dz);
+                        if (b == (byte)BlockType.Log || b == (byte)BlockType.BirchLog || b == (byte)BlockType.SpruceLog)
+                        {
+                            return true;
+                        }
+                    }
+                }
+            }
+            return false;
+        }
+
+        public void TriggerTreeLeafDecay(Vector3i logPos)
+        {
+            // When logs are mined, scan surrounding canopy (up to 5 blocks horizontal, -2 to +8 vertical)
+            for (int dy = -2; dy <= 8; dy++)
+            {
+                for (int dx = -5; dx <= 5; dx++)
+                {
+                    for (int dz = -5; dz <= 5; dz++)
+                    {
+                        var leafPos = new Vector3i(logPos.X + dx, logPos.Y + dy, logPos.Z + dz);
+                        byte b = GetBlockWorld(leafPos.X, leafPos.Y, leafPos.Z);
+                        if (b == (byte)BlockType.Leaves || b == (byte)BlockType.SpruceLeaves)
+                        {
+                            if (!HasLogWithin(leafPos, 4))
+                            {
+                                if (!PendingDecayingLeaves.ContainsKey(leafPos))
+                                {
+                                    // Leaves disappear after 1 to 2 in-game minutes (60 to 120 seconds)
+                                    float decayDelay = 60.0f + Random.Shared.NextSingle() * 60.0f;
+                                    PendingDecayingLeaves[leafPos] = decayDelay;
+                                }
+                            }
+                        }
+                    }
                 }
             }
         }
@@ -551,26 +638,7 @@ namespace VelmoraCraft.src.World
                         ApplyModifiedBlocksToChunk(chunk);
                         chunk.IsDecorated = true;
 
-                        // Scan chunk for placed light sources (lava, torches)
-                        chunk.LightPositions.Clear();
-                        for (int x = 0; x < Chunk.SIZE_X; x++)
-                        {
-                            for (int y = 0; y < Chunk.SIZE_Y; y++)
-                            {
-                                for (int z = 0; z < Chunk.SIZE_Z; z++)
-                                {
-                                    byte b = chunk.GetBlock(x, y, z);
-                                    if (BlockRegistry.Get(b).IsLightSource)
-                                    {
-                                        int wx = (int)chunk.Position.X + x;
-                                        int wz = (int)chunk.Position.Z + z;
-                                        var lpos = new Vector3i(wx, y, wz);
-                                        lightSources.TryAdd(lpos, 0);
-                                        chunk.LightPositions.Add(lpos);
-                                    }
-                                }
-                            }
-                        }
+                        ScanChunkLightSources(chunk);
                     }
 
                     // 4. Build mesh with boundary edge culling
@@ -629,17 +697,28 @@ namespace VelmoraCraft.src.World
             }
 
             // 3. Update Minecart entities
+            while (pendingSpawnedMinecarts.TryDequeue(out var pendingCart))
+            {
+                lock (Minecarts)
+                {
+                    Minecarts.Add(pendingCart);
+                }
+            }
+
             if (deltaTime > 0f)
             {
-                for (int i = Minecarts.Count - 1; i >= 0; i--)
+                lock (Minecarts)
                 {
-                    var cart = Minecarts[i];
-                    if (!cart.IsAlive)
+                    for (int i = Minecarts.Count - 1; i >= 0; i--)
                     {
-                        Minecarts.RemoveAt(i);
-                        continue;
+                        var cart = Minecarts[i];
+                        if (!cart.IsAlive)
+                        {
+                            Minecarts.RemoveAt(i);
+                            continue;
+                        }
+                        cart.Update(this, deltaTime);
                     }
-                    cart.Update(this, deltaTime);
                 }
             }
 
@@ -648,13 +727,15 @@ namespace VelmoraCraft.src.World
             {
                 FluidSystem.Update(this, deltaTime);
 
-                // 4b. Crop growth simulation (wheat grows through 8 stages)
-                cropGrowthTimer += deltaTime;
-                if (cropGrowthTimer >= 3.5f)
+                // 4b. Crop growth simulation (wheat grows through 7 stages to maturity in 3 to 4 in-game minutes)
+                if (GrowingCrops.Count > 0)
                 {
-                    cropGrowthTimer = 0f;
-                    if (GrowingCrops.Count > 0)
+                    cropGrowthTimer += deltaTime;
+                    if (cropGrowthTimer >= 1.0f) // Tick once per second
                     {
+                        float step = cropGrowthTimer;
+                        cropGrowthTimer = 0f;
+
                         var crops = new List<Vector3i>(GrowingCrops);
                         foreach (var cPos in crops)
                         {
@@ -664,15 +745,142 @@ namespace VelmoraCraft.src.World
                                 byte stage = GetBlockMetadata(cPos.X, cPos.Y, cPos.Z);
                                 if (stage < 7)
                                 {
-                                    if (Random.Shared.Next(100) < 55)
+                                    if (!CropStageTimers.TryGetValue(cPos, out float t))
                                     {
-                                        SetBlockMetadata(cPos.X, cPos.Y, cPos.Z, (byte)(stage + 1));
+                                        t = 25.0f + Random.Shared.NextSingle() * 10.0f; // ~30s per stage (3-4 mins total)
                                     }
+                                    t -= step;
+                                    if (t <= 0f)
+                                    {
+                                        byte newStage = (byte)(stage + 1);
+                                        SetBlockMetadata(cPos.X, cPos.Y, cPos.Z, newStage);
+                                        if (newStage < 7)
+                                        {
+                                            CropStageTimers[cPos] = 25.0f + Random.Shared.NextSingle() * 10.0f;
+                                        }
+                                        else
+                                        {
+                                            CropStageTimers.TryRemove(cPos, out _);
+                                        }
+                                    }
+                                    else
+                                    {
+                                        CropStageTimers[cPos] = t;
+                                    }
+                                }
+                                else
+                                {
+                                    CropStageTimers.TryRemove(cPos, out _);
                                 }
                             }
                             else
                             {
                                 GrowingCrops.Remove(cPos);
+                                CropStageTimers.TryRemove(cPos, out _);
+                            }
+                        }
+                    }
+                }
+
+                // 4c. Tree Sapling growth simulation (saplings grow into trees in 5 to 6 in-game minutes)
+                if (GrowingSaplings.Count > 0)
+                {
+                    saplingGrowthTimer += deltaTime;
+                    if (saplingGrowthTimer >= 1.0f)
+                    {
+                        float step = saplingGrowthTimer;
+                        saplingGrowthTimer = 0f;
+
+                        var saplingEntries = GrowingSaplings.ToArray();
+                        foreach (var kvp in saplingEntries)
+                        {
+                            Vector3i sPos = kvp.Key;
+                            float remaining = kvp.Value - step;
+
+                            if (remaining <= 0f)
+                            {
+                                GrowingSaplings.TryRemove(sPos, out _);
+
+                                byte b = GetBlockWorld(sPos.X, sPos.Y, sPos.Z);
+                                if (b == (byte)BlockType.OakSapling)
+                                {
+                                    // Space check: ensure clearance above sapling
+                                    bool hasClearance = true;
+                                    for (int cy = 1; cy <= 5; cy++)
+                                    {
+                                        byte above = GetBlockWorld(sPos.X, sPos.Y + cy, sPos.Z);
+                                        if (above != (byte)BlockType.Empty && above != (byte)BlockType.Leaves)
+                                        {
+                                            hasClearance = false;
+                                            break;
+                                        }
+                                    }
+
+                                    if (hasClearance)
+                                    {
+                                        // Replace sapling with tree trunk base and grow
+                                        SetBlockWorld(sPos.X, sPos.Y, sPos.Z, BlockType.Empty);
+                                        var biome = GetBiome(sPos.X, sPos.Z);
+                                        if (biome == BiomeType.Mountains)
+                                        {
+                                            generator.GrowSpruceTree(this, sPos.X, sPos.Y, sPos.Z);
+                                        }
+                                        else if (biome == BiomeType.Forest && (WorldGenerator.HashCoordinates(sPos.X, 55, sPos.Z, Seed) % 3 == 0))
+                                        {
+                                            generator.GrowBirchTree(this, sPos.X, sPos.Y, sPos.Z);
+                                        }
+                                        else
+                                        {
+                                            generator.GrowTree(this, sPos.X, sPos.Y, sPos.Z);
+                                        }
+                                    }
+                                }
+                            }
+                            else
+                            {
+                                GrowingSaplings[sPos] = remaining;
+                            }
+                        }
+                    }
+                }
+
+                // 4d. Leaf Decay simulation (leaves with no trunk logs disappear after 1 to 2 in-game minutes)
+                if (PendingDecayingLeaves.Count > 0)
+                {
+                    leafDecayTimer += deltaTime;
+                    if (leafDecayTimer >= 1.0f)
+                    {
+                        float step = leafDecayTimer;
+                        leafDecayTimer = 0f;
+
+                        var leafEntries = PendingDecayingLeaves.ToArray();
+                        foreach (var kvp in leafEntries)
+                        {
+                            Vector3i lPos = kvp.Key;
+                            float remaining = kvp.Value - step;
+
+                            if (remaining <= 0f)
+                            {
+                                PendingDecayingLeaves.TryRemove(lPos, out _);
+
+                                byte b = GetBlockWorld(lPos.X, lPos.Y, lPos.Z);
+                                if (b == (byte)BlockType.Leaves || b == (byte)BlockType.SpruceLeaves)
+                                {
+                                    if (!HasLogWithin(lPos, 4))
+                                    {
+                                        SetBlockWorld(lPos.X, lPos.Y, lPos.Z, BlockType.Empty);
+
+                                        // ~10% chance to drop Oak Sapling
+                                        if (Random.Shared.Next(100) < 10 && PlayerRef != null)
+                                        {
+                                            PlayerRef.DroppedItems.Add(new ItemDrop(BlockType.OakSapling, new Vector3(lPos.X + 0.5f, lPos.Y + 0.5f, lPos.Z + 0.5f)));
+                                        }
+                                    }
+                                }
+                            }
+                            else
+                            {
+                                PendingDecayingLeaves[lPos] = remaining;
                             }
                         }
                     }
@@ -931,9 +1139,12 @@ namespace VelmoraCraft.src.World
             }
 
             // Render minecarts with the same active shader & texture atlas
-            if (Minecarts.Count > 0)
+            lock (Minecarts)
             {
-                MinecartRenderer.Render(Minecarts, shaderProgram);
+                if (Minecarts.Count > 0)
+                {
+                    MinecartRenderer.Render(Minecarts, shaderProgram);
+                }
             }
         }
 
@@ -959,8 +1170,38 @@ namespace VelmoraCraft.src.World
             }
 
             MinecartRenderer.Cleanup();
-            Minecarts.Clear();
+            lock (Minecarts)
+            {
+                Minecarts.Clear();
+            }
+            while (pendingSpawnedMinecarts.TryDequeue(out _)) { }
             lightSources.Clear();
+        }
+
+        private void ScanChunkLightSources(Chunk chunk)
+        {
+            lock (chunk.LightPositions)
+            {
+                chunk.LightPositions.Clear();
+                for (int x = 0; x < Chunk.SIZE_X; x++)
+                {
+                    for (int y = 0; y < Chunk.SIZE_Y; y++)
+                    {
+                        for (int z = 0; z < Chunk.SIZE_Z; z++)
+                        {
+                            byte b = chunk.GetBlock(x, y, z);
+                            if (BlockRegistry.Get(b).IsLightSource)
+                            {
+                                int wx = (int)chunk.Position.X + x;
+                                int wz = (int)chunk.Position.Z + z;
+                                var lpos = new Vector3i(wx, y, wz);
+                                lightSources.TryAdd(lpos, 0);
+                                chunk.LightPositions.Add(lpos);
+                            }
+                        }
+                    }
+                }
+            }
         }
 
         public List<(Vector3 Position, Vector3 Color, float Radius, float Intensity)> GetActivePointLights(Vector3 playerPos, int maxCount = 15, float deltaTime = 0.016f)
@@ -969,7 +1210,7 @@ namespace VelmoraCraft.src.World
             float moveDistSq = Vector3.DistanceSquared(playerPos, lastLightQueryPos);
 
             // Re-use cached point lights if player hasn't moved noticeably and timer is small
-            if (moveDistSq < 0.64f && lightQueryTimer < 0.05f && activePointLights.Count > 0)
+            if (moveDistSq < 0.64f && lightQueryTimer < 0.05f)
             {
                 return activePointLights;
             }
@@ -982,25 +1223,28 @@ namespace VelmoraCraft.src.World
             int centerCX = (int)Math.Floor(playerPos.X / Chunk.SIZE_X);
             int centerCZ = (int)Math.Floor(playerPos.Z / Chunk.SIZE_Z);
 
-            // Fast spatial lookup: only inspect chunks within 2 chunks radius (max 32 blocks of player)
-            for (int dx = -2; dx <= 2; dx++)
+            // Spatial lookup: inspect chunks within 3 chunks radius (up to 48 blocks of player)
+            for (int dx = -3; dx <= 3; dx++)
             {
-                for (int dz = -2; dz <= 2; dz++)
+                for (int dz = -3; dz <= 3; dz++)
                 {
                     if (chunks.TryGetValue(new Vector2i(centerCX + dx, centerCZ + dz), out var chunk))
                     {
-                        var lights = chunk.LightPositions;
-                        for (int k = 0; k < lights.Count; k++)
+                        lock (chunk.LightPositions)
                         {
-                            var pos = lights[k];
-                            float lx = pos.X + 0.5f - playerPos.X;
-                            float ly = pos.Y + 0.5f - playerPos.Y;
-                            float lz = pos.Z + 0.5f - playerPos.Z;
-                            float distSq = lx * lx + ly * ly + lz * lz;
-
-                            if (distSq < 625.0f) // Within 25 blocks radius
+                            var lights = chunk.LightPositions;
+                            for (int k = 0; k < lights.Count; k++)
                             {
-                                lightCandidates.Add((pos, distSq));
+                                var pos = lights[k];
+                                float lx = pos.X - playerPos.X;
+                                float ly = pos.Y - playerPos.Y;
+                                float lz = pos.Z - playerPos.Z;
+                                float distSq = lx * lx + ly * ly + lz * lz;
+
+                                if (distSq < 1600.0f) // Within 40 blocks radius
+                                {
+                                    lightCandidates.Add((pos, distSq));
+                                }
                             }
                         }
                     }
@@ -1012,16 +1256,39 @@ namespace VelmoraCraft.src.World
                 lightCandidates.Sort((a, b) => a.DistSq.CompareTo(b.DistSq));
             }
 
-            int count = Math.Min(maxCount, lightCandidates.Count);
-
-            for (int i = 0; i < count; i++)
+            for (int i = 0; i < lightCandidates.Count && activePointLights.Count < maxCount; i++)
             {
                 var pos = lightCandidates[i].Pos;
                 byte blockId = GetBlockWorld(pos.X, pos.Y, pos.Z);
 
+                if (blockId == (byte)BlockType.Empty || !BlockRegistry.Get(blockId).IsLightSource)
+                {
+                    continue;
+                }
+
+                if (blockId == (byte)BlockType.Portal)
+                {
+                    // Deduplicate adjacent portal blocks so a 2x3 portal frame produces a clean, focused emitter
+                    bool duplicatePortal = false;
+                    for (int p = 0; p < activePointLights.Count; p++)
+                    {
+                        var existing = activePointLights[p];
+                        float pdx = existing.Position.X - pos.X;
+                        float pdy = existing.Position.Y - pos.Y;
+                        float pdz = existing.Position.Z - pos.Z;
+                        if (pdx * pdx + pdy * pdy + pdz * pdz < 9.0f)
+                        {
+                            duplicatePortal = true;
+                            break;
+                        }
+                    }
+                    if (duplicatePortal) continue;
+                }
+
                 Vector3 lightColor;
                 float radius = 15.0f;
                 float intensity = 1.4f;
+                Vector3 lightPos = new Vector3(pos.X, pos.Y, pos.Z);
 
                 if (blockId == (byte)BlockType.Lava)
                 {
@@ -1030,9 +1297,9 @@ namespace VelmoraCraft.src.World
                 }
                 else if (blockId == (byte)BlockType.Portal)
                 {
-                    lightColor = new Vector3(0.75f, 0.20f, 0.95f);
-                    radius = 14.0f;
-                    intensity = 1.6f;
+                    lightColor = new Vector3(0.85f, 0.25f, 1.0f);
+                    radius = 16.0f;
+                    intensity = 1.7f;
                 }
                 else if (blockId == (byte)BlockType.Glowstone)
                 {
@@ -1052,18 +1319,22 @@ namespace VelmoraCraft.src.World
                     radius = 13.0f;
                     intensity = 1.4f;
                 }
-                else if (blockId == (byte)BlockType.RedstoneTorch || blockId == (byte)BlockType.RedstoneOre || blockId == (byte)BlockType.RedstoneBlock)
+                else if (blockId == (byte)BlockType.RedstoneTorch)
                 {
                     lightColor = new Vector3(1.0f, 0.15f, 0.10f);
                     radius = 11.0f;
                     intensity = 1.2f;
+                    lightPos = new Vector3(pos.X, pos.Y + 0.20f, pos.Z);
                 }
-                else
+                else // BlockType.Torch
                 {
-                    lightColor = new Vector3(1.0f, 0.75f, 0.40f);
+                    lightColor = new Vector3(1.0f, 0.74f, 0.40f);
+                    radius = 15.0f;
+                    intensity = 1.4f;
+                    lightPos = new Vector3(pos.X, pos.Y + 0.20f, pos.Z);
                 }
 
-                activePointLights.Add((new Vector3(pos.X + 0.5f, pos.Y + 0.5f, pos.Z + 0.5f), lightColor, radius, intensity));
+                activePointLights.Add((lightPos, lightColor, radius, intensity));
             }
 
             return activePointLights;

@@ -595,7 +595,11 @@ namespace VelmoraCraft.src.World
                 }
             }
 
-            AddFaceWithUV(face, x, y, z, def.GetFaceAtlasCoord(texFace), def.TintColor, builder, swayTop, swayBottom);
+            Vector3 tint = def.IsLightSource 
+                ? (def.Type == BlockType.Portal ? def.TintColor : new Vector3(1.35f, 1.25f, 1.10f))
+                : def.TintColor;
+
+            AddFaceWithUV(face, x, y, z, def.GetFaceAtlasCoord(texFace), tint, builder, swayTop, swayBottom);
         }
 
         private static Face GetOrientedTextureFace(Face meshFace, byte facing)
