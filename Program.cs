@@ -1,14 +1,14 @@
-using OpenTK.Windowing.Common;
 using VelmoraCraft;
+using OpenTK.Windowing.Common;
 
-var width = 1280;
-var height = 720;
+int width = 1280;
+int height = 720;
 
-var mode = VSyncMode.On;
-var state = WindowState.Normal;
-var border = WindowBorder.Resizable;
+VSyncMode mode = VSyncMode.On;
+WindowState state = WindowState.Normal;
+WindowBorder border = WindowBorder.Resizable;
 
-var title = "VelmoraCraft";
+string title = "VelmoraCraft";
 
-var game = new Game(width, height, title, mode, state, border);
+Game game = new Game(width, height, title, mode, state, border);
 game.Run();
