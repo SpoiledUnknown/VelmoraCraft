@@ -176,7 +176,6 @@ namespace VelmoraCraft.src.World
                 Vector3i neighbor = sourcePos + offset;
                 byte neighborId = world.GetBlockWorld(neighbor.X, neighbor.Y, neighbor.Z);
 
-                // 1. Powered Rails
                 if (isPowered)
                 {
                     if (neighborId == (byte)BlockType.PoweredRail)
@@ -196,7 +195,6 @@ namespace VelmoraCraft.src.World
                     }
                 }
 
-                // 2. Doors (Redstone activation)
                 if (isPowered)
                 {
                     if (neighborId == (byte)BlockType.DoorLower || neighborId == (byte)BlockType.DoorUpper ||

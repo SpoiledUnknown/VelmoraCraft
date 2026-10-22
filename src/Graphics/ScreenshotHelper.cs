@@ -7,7 +7,6 @@ namespace VelmoraCraft.src.Graphics
     {
         public static string CaptureAndSave(int width, int height)
         {
-            // 1. Read pixels from OpenGL framebuffer (RGBA, 4 bytes per pixel)
             byte[] glPixels = new byte[width * height * 4];
             GL.PixelStorei(PixelStoreParameter.PackAlignment, 1);
             unsafe
@@ -18,7 +17,6 @@ namespace VelmoraCraft.src.Graphics
                 }
             }
 
-            // 2. Prepare destination path in user's Pictures folder
             string picturesDir = Environment.GetFolderPath(Environment.SpecialFolder.MyPictures);
             string screenshotsDir = Path.Combine(picturesDir, "VoxelScreenshots");
             Directory.CreateDirectory(screenshotsDir);
@@ -32,7 +30,6 @@ namespace VelmoraCraft.src.Graphics
                 fullPath = Path.Combine(screenshotsDir, $"{baseFilename}_{counter++}.png");
             }
 
-            // 3. Save as standard PNG with vertical flip (OpenGL bottom-to-top -> PNG top-to-bottom)
             SavePng(fullPath, glPixels, width, height);
 
             return fullPath;

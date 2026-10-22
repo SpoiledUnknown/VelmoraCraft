@@ -42,7 +42,6 @@ namespace VelmoraCraft.src.UI
         {
             if (type == BlockType.Empty || count <= 0) return false;
 
-            // 1. Try to merge into existing slots
             for (int i = 0; i < Slots.Length; i++)
             {
                 if (!Slots[i].IsEmpty && Slots[i].Type == type && Slots[i].Count < maxStack)
@@ -56,7 +55,6 @@ namespace VelmoraCraft.src.UI
                 }
             }
 
-            // 2. Try to put into empty slots
             for (int i = 0; i < Slots.Length; i++)
             {
                 if (Slots[i].IsEmpty)

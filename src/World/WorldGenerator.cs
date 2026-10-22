@@ -28,19 +28,16 @@ namespace VelmoraCraft.src.World
         {
             this.seed = seed;
 
-            // 1. Base Elevation Noise (rolling terrain)
             elevationNoise = new FastNoiseLite(seed);
             elevationNoise.SetNoiseType(FastNoiseLite.NoiseType.OpenSimplex2);
             elevationNoise.SetFrequency(0.012f);
             elevationNoise.SetFractalType(FastNoiseLite.FractalType.FBm);
             elevationNoise.SetFractalOctaves(3);
 
-            // 2. Continental / Mountain Noise (large elevation variations)
             continentalNoise = new FastNoiseLite(seed + 101);
             continentalNoise.SetNoiseType(FastNoiseLite.NoiseType.OpenSimplex2);
             continentalNoise.SetFrequency(0.005f);
 
-            // 3. 3D Cave Noise (Dual-noise worm / Swiss-cheese tunnels)
             caveNoiseA = new FastNoiseLite(seed + 202);
             caveNoiseA.SetNoiseType(FastNoiseLite.NoiseType.OpenSimplex2);
             caveNoiseA.SetFrequency(0.035f);
@@ -49,7 +46,6 @@ namespace VelmoraCraft.src.World
             caveNoiseB.SetNoiseType(FastNoiseLite.NoiseType.OpenSimplex2);
             caveNoiseB.SetFrequency(0.035f);
 
-            // 4. Biome parameter noise
             temperatureNoise = new FastNoiseLite(seed + 404);
             temperatureNoise.SetNoiseType(FastNoiseLite.NoiseType.OpenSimplex2);
             temperatureNoise.SetFrequency(0.004f);
@@ -120,14 +116,12 @@ namespace VelmoraCraft.src.World
                     // Fill vertical column
                     for (int y = 0; y < Chunk.SIZE_Y; y++)
                     {
-                        // 1. Indestructible Bedrock floor
                         if (y == 0)
                         {
                             chunk.SetBlock(lx, y, lz, BlockType.Bedrock);
                             continue;
                         }
 
-                        // 2. Below bedrock or above surface
                         if (y > surfaceHeight)
                         {
                             // Static Water below Sea Level
@@ -142,7 +136,6 @@ namespace VelmoraCraft.src.World
                             continue;
                         }
 
-                        // 3. 3D Cave carving (carve air where both 3D noises overlap within narrow band)
                         if (y > 3 && y < surfaceHeight - 2)
                         {
                             float cA = caveNoiseA.GetNoise(wx, y * 1.5f, wz);
@@ -163,7 +156,6 @@ namespace VelmoraCraft.src.World
                             }
                         }
 
-                        // 4. Ground layer blocks
                         if (y == surfaceHeight)
                         {
                             if (surfaceHeight < SEA_LEVEL + 2 && biome != BiomeType.Mountains)
@@ -274,7 +266,6 @@ namespace VelmoraCraft.src.World
 
                     BiomeType biome = GetBiome(wx, wz);
 
-                    // 1. Desert Decoration (Cactus & Sugar Cane)
                     if (biome == BiomeType.Desert)
                     {
                         int cactusHash = HashCoordinates(wx, 55, wz, seed + 111);
@@ -331,7 +322,6 @@ namespace VelmoraCraft.src.World
                         continue;
                     }
 
-                    // 2. Tree Generation
                     int treeChance = (biome == BiomeType.Forest) ? 35 : 160;
                     int treeHash = HashCoordinates(wx, 77, wz, seed + 888);
 
@@ -360,7 +350,6 @@ namespace VelmoraCraft.src.World
                         continue;
                     }
 
-                    // 3. Surface Flora & Crops (Flowers, Mushrooms, Pumpkins, Sugar Cane)
                     int floraHash = HashCoordinates(wx, 99, wz, seed + 999);
                     int surface = world.GetSurfaceHeight(wx, wz);
                     byte groundBlock = world.GetBlockWorld(wx, surface, wz);
@@ -409,7 +398,6 @@ namespace VelmoraCraft.src.World
                         }
                     }
 
-                    // 4. Rare Underground Dungeon Spawner Room
                     int dungeonHash = HashCoordinates(wx, 33, wz, seed + 777);
                     if (dungeonHash % 900 == 0)
                     {
@@ -422,7 +410,6 @@ namespace VelmoraCraft.src.World
                 }
             }
 
-            // 5. Major World Structures
             DecorateChunkStructures(world, chunk);
         }
 
@@ -609,34 +596,29 @@ namespace VelmoraCraft.src.World
             BiomeType centerBiome = GetBiome(cx, cz);
             int surfaceY = world.GetSurfaceHeight(cx, cz);
 
-            // 1. Small Village: rare civilized settlement achievement in plains or forests (1 candidate per 13x13 chunk region)
             if (IsRegionCandidateChunk(chunkX, chunkZ, 13, 31, 32, 3003) &&
                 (centerBiome == BiomeType.Plains || centerBiome == BiomeType.Forest) &&
                 surfaceY > SEA_LEVEL + 1)
             {
                 GenerateVillage(world, cx, surfaceY, cz, chunkHash);
             }
-            // 2. Surface Railway and Mineshaft: rare frontier railway & depot (1 candidate per 11x11 chunk region)
             else if (IsRegionCandidateChunk(chunkX, chunkZ, 11, 41, 42, 4004) &&
                      centerBiome != BiomeType.Desert &&
                      surfaceY > SEA_LEVEL + 2)
             {
                 GenerateSurfaceRailwayAndMineshaft(world, cx, surfaceY, cz, chunkHash);
             }
-            // 3. Ancient Stone Ruins: rare mysterious relic shrine (1 candidate per 10x10 chunk region)
             else if (IsRegionCandidateChunk(chunkX, chunkZ, 10, 51, 52, 5005) &&
                      surfaceY > SEA_LEVEL)
             {
                 GenerateAncientRuins(world, cx, surfaceY, cz, chunkHash);
             }
-            // 4. Desert Well: rare desert oasis discovery (1 candidate per 8x8 chunk region)
             else if (IsRegionCandidateChunk(chunkX, chunkZ, 8, 11, 12, 1001) &&
                      centerBiome == BiomeType.Desert &&
                      surfaceY > SEA_LEVEL)
             {
                 GenerateDesertWell(world, cx, surfaceY, cz);
             }
-            // 5. Mountain Tent Camp: rare high-altitude summit camp (1 candidate per 8x8 chunk region on high peaks)
             else if (IsRegionCandidateChunk(chunkX, chunkZ, 8, 21, 22, 2002) &&
                      centerBiome == BiomeType.Mountains &&
                      surfaceY >= 50)
@@ -644,7 +626,6 @@ namespace VelmoraCraft.src.World
                 GenerateMountainCamp(world, cx, surfaceY, cz, chunkHash);
             }
 
-            // 6. Very Small Mineshaft Underground: rare subterranean timber corridor with loot (1 candidate per 8x8 chunk region)
             if (IsRegionCandidateChunk(chunkX, chunkZ, 8, 61, 62, 6006))
             {
                 int undergroundHash = HashCoordinates(chunkX, 91, chunkZ, seed + 67890);
@@ -735,7 +716,6 @@ namespace VelmoraCraft.src.World
             // Leveled 7x7 mountain campsite
             BlockType tentWool = (seed % 3 == 0) ? BlockType.RedWool : ((seed % 3 == 1) ? BlockType.BlueWool : BlockType.WhiteWool);
 
-            // 1. Flatten campsite floor
             for (int dx = -3; dx <= 3; dx++)
             {
                 for (int dz = -3; dz <= 3; dz++)
@@ -750,7 +730,6 @@ namespace VelmoraCraft.src.World
                 }
             }
 
-            // 2. Wool A-frame Tent (extends along Z from -2 to 2, width 5 along X)
             for (int dz = -2; dz <= 2; dz++)
             {
                 int z = cz + dz;
@@ -787,7 +766,6 @@ namespace VelmoraCraft.src.World
 
             world.SetBlockWorld(cx, surfaceY + 2, cz, BlockType.Torch);
 
-            // 3. Campfire & Workshop area outside tent (+X side)
             world.SetBlockWorld(cx + 3, surfaceY + 1, cz, BlockType.CraftingTable);
             world.SetBlockWorld(cx + 3, surfaceY + 1, cz + 1, BlockType.Furnace);
 
@@ -900,7 +878,6 @@ namespace VelmoraCraft.src.World
         private void GenerateSurfaceRailwayAndMineshaft(World world, int cx, int surfaceY, int cz, int seed)
         {
             // Bigger surface mineshaft headframe, depot station & 24-block scenic railway system
-            // 1. Station Platform & Shed (5x5 footprint)
             for (int dx = -2; dx <= 2; dx++)
             {
                 for (int dz = -2; dz <= 2; dz++)
@@ -953,7 +930,6 @@ namespace VelmoraCraft.src.World
                 (BlockType.Torch, 8),
                 (BlockType.Bread, 3));
 
-            // 2. Long Railway System (24 blocks extending along +X axis)
             int trackLength = 24;
             int trackZ = cz;
             int trackY = surfaceY + 1;
@@ -992,7 +968,6 @@ namespace VelmoraCraft.src.World
             world.SetBlockWorld(cx + trackLength, trackY, trackZ, BlockType.Cobblestone);
             world.SetBlockWorld(cx + trackLength, trackY + 1, trackZ, BlockType.Torch);
 
-            // 3. Spawn a physical ready-to-ride Minecart on the track at depot!
             world.SpawnMinecart(new Minecart(new Vector3(cx + 1.5f, trackY + 0.1f, trackZ + 0.5f)));
         }
 
@@ -1000,13 +975,7 @@ namespace VelmoraCraft.src.World
         {
             // Small village built with Bricks, Cobblestone, and Stone
             // Layout:
-            // 1. Central Town Well at (cx, cz)
-            // 2. Residential Brick Cottage at (cx - 8, cz - 2)
-            // 3. Blacksmith / Workshop at (cx + 8, cz - 2)
-            // 4. Farmland & Wheat Garden at (cx - 2, cz + 7)
-            // 5. Cobblestone pathways interconnecting them
 
-            // --- 1. Central Village Well ---
             for (int dx = -2; dx <= 2; dx++)
             {
                 for (int dz = -2; dz <= 2; dz++)
@@ -1050,7 +1019,6 @@ namespace VelmoraCraft.src.World
             // Well torches
             world.SetBlockWorld(cx, surfaceY + 3, cz, BlockType.Torch);
 
-            // --- 2. Cottage 1 (Residential Home: 5 wide x 6 long) ---
             int hx = cx - 8;
             int hz = cz - 2;
             for (int dx = -2; dx <= 2; dx++)
@@ -1115,7 +1083,6 @@ namespace VelmoraCraft.src.World
                 (BlockType.Torch, 6),
                 (BlockType.Bookshelf, 2));
 
-            // --- 3. Blacksmith / Forge (6 wide x 5 deep: Cobblestone & Stone) ---
             int bx = cx + 8;
             int bz = cz - 2;
             for (int dx = -2; dx <= 3; dx++)
@@ -1176,7 +1143,6 @@ namespace VelmoraCraft.src.World
                 (BlockType.FlintAndSteel, 1),
                 (BlockType.Bread, 3));
 
-            // --- 4. Village Farmland & Crop Garden ---
             int fx = cx - 2;
             int fz = cz + 7;
             for (int dx = -2; dx <= 2; dx++)
@@ -1207,7 +1173,6 @@ namespace VelmoraCraft.src.World
                 }
             }
 
-            // --- 5. Connecting Cobblestone Pathways ---
             for (int x = Math.Min(hx, cx); x <= Math.Max(bx, cx); x++)
             {
                 world.SetBlockWorld(x, surfaceY, cz, BlockType.Cobblestone);

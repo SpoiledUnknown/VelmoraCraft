@@ -270,7 +270,6 @@ namespace VelmoraCraft.src.Graphics
             GL.UniformMatrix4f(viewLoc, 1, true, ref view);
             GL.UniformMatrix4f(projLoc, 1, true, ref projection);
 
-            // 1. STARS (Night sky)
             float sunHeight = dayNightCycle.SunDirection.Y;
             float starBrightness = Math.Clamp(-sunHeight * 2.5f, 0.0f, 1.0f);
 
@@ -288,7 +287,6 @@ namespace VelmoraCraft.src.Graphics
                 GL.DrawElements(PrimitiveType.Triangles, starsIndexCount, DrawElementsType.UnsignedInt, 0);
             }
 
-            // 2. SUN (Classic square sun)
             Vector3 sunDir = dayNightCycle.SunDirection;
             if (sunDir.Y > -0.22f) // Visible above or near horizon
             {
@@ -320,7 +318,6 @@ namespace VelmoraCraft.src.Graphics
                 GL.DrawElements(PrimitiveType.Triangles, 6, DrawElementsType.UnsignedInt, 0);
             }
 
-            // 3. MOON (Classic square full moon with craters)
             Vector3 moonDir = dayNightCycle.MoonDirection;
             if (moonDir.Y > -0.22f) // Visible above or near horizon
             {

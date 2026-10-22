@@ -105,15 +105,7 @@ namespace VelmoraCraft.src.Entities
             UpdateCamera();
         }
 
-        public void PopulateTestingInventory()
-        {
-            // Testing phase completed - starting inventory is empty for authentic gameplay
-        }
 
-        public void EnsureTestingItems()
-        {
-            // Testing phase completed
-        }
 
         public AABB GetAABB()
         {
@@ -762,7 +754,7 @@ namespace VelmoraCraft.src.Entities
         private bool rightClickWasDown = false;
         private void HandleBlockInteractions(World.World world, KeyboardState keyboard, MouseState mouse, float deltaTime)
         {
-            // 0. Interaction with Minecart Entities
+            // Interaction with Minecart Entities
             if (TargetedMinecart != null)
             {
                 // Left Click -> Break minecart (drop item)
@@ -798,7 +790,7 @@ namespace VelmoraCraft.src.Entities
                 return;
             }
 
-            // 1. Timed Block Breaking (Left Click)
+            // Timed Block Breaking (Left Click)
             if (mouse.IsButtonDown(MouseButton.Left) && TargetedBlock.HasValue)
             {
                 var bp = TargetedBlock.Value;
@@ -981,7 +973,7 @@ namespace VelmoraCraft.src.Entities
                 BreakingProgress = 0.0f;
             }
 
-            // 2. Direct Interaction / Block Placement (Right Click)
+            // Direct Interaction / Block Placement (Right Click)
             bool rightMouseDown = mouse.IsButtonDown(MouseButton.Right);
             if (rightMouseDown && !rightClickWasDown)
             {
@@ -1548,7 +1540,7 @@ namespace VelmoraCraft.src.Entities
                 DamageFlashTimer = MathF.Max(0f, DamageFlashTimer - deltaTime);
             }
 
-            // 1. DROWNING CHECK (Head/eyes submerged in water)
+            // DROWNING CHECK (Head/eyes submerged in water)
             int eyeX = (int)Math.Floor(Position.X);
             int eyeY = (int)Math.Floor(Position.Y + EyeHeight);
             int eyeZ = (int)Math.Floor(Position.Z);
@@ -1582,7 +1574,7 @@ namespace VelmoraCraft.src.Entities
                 drownDamageTimer = 0f;
             }
 
-            // 2. LAVA CHECK (Feet, body, or head in lava)
+            // LAVA CHECK (Feet, body, or head in lava)
             int footX = (int)Math.Floor(Position.X);
             int footY = (int)Math.Floor(Position.Y + 0.1f);
             int footZ = (int)Math.Floor(Position.Z);
@@ -1606,7 +1598,7 @@ namespace VelmoraCraft.src.Entities
                 lavaDamageTimer = 0.45f; // Prime for quick reaction when stepping into lava
             }
 
-            // 3. CACTUS CHECK (Touching or standing on cactus blocks)
+            // CACTUS CHECK (Touching or standing on cactus blocks)
             AABB pBox = GetAABB();
             float skin = 0.08f;
             AABB touchBox = new AABB(pBox.Min.X - skin, pBox.Min.Y - skin, pBox.Min.Z - skin,
@@ -1654,7 +1646,7 @@ namespace VelmoraCraft.src.Entities
                 cactusDamageTimer = 0.45f; // Prime for quick reaction when touching cactus
             }
 
-            // 4. PASSIVE HEALING
+            // PASSIVE HEALING
             // Only heals after 10 seconds of receiving damage
             if (Health < MaxHealth && Health > 0f && timeSinceLastDamage >= 10.0f && !isInLava && !isHeadInWater && !isTouchingCactus)
             {

@@ -89,7 +89,6 @@ namespace VelmoraCraft.src.UI
             out bool isFirstHalf,
             out bool isAxisX)
         {
-            // 1. Check contiguous line of chests along X axis
             int startX = pos.X;
             while (startX - pos.X > -16 && getBlock(startX - 1, pos.Y, pos.Z) == (byte)BlockType.Chest)
             {
@@ -125,7 +124,6 @@ namespace VelmoraCraft.src.UI
                 }
             }
 
-            // 2. Check contiguous line of chests along Z axis
             int startZ = pos.Z;
             while (startZ - pos.Z > -16 && getBlock(pos.X, pos.Y, startZ - 1) == (byte)BlockType.Chest)
             {

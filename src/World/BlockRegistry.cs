@@ -365,49 +365,32 @@ namespace VelmoraCraft.src.World
             Register(CreateUniformBlock(BlockType.IronIngot, "Iron Ingot", isSolid: false, isTransparent: true, hardness: 0f, new Vector2(1, 2)));
             Register(CreateUniformBlock(BlockType.FlintAndSteel, "Flint and Steel", isSolid: false, isTransparent: true, hardness: 0f, new Vector2(5, 2)));
 
-            // 1. Torch (Cross-quad, light emitting)
             Register(CreateUniformBlock(BlockType.Torch, "Torch", isSolid: false, isTransparent: true, hardness: 0f, new Vector2(0, 5), meshType: MeshType.CrossQuad, isLightSource: true));
 
-            // 2. Wooden Door
-            // Lower Half (Closed)
             Register(CreateUniformBlock(BlockType.DoorLower, "Wooden Door", isSolid: true, isTransparent: true, hardness: 1.5f, new Vector2(1, 6), meshType: MeshType.DoorClosed));
-            // Upper Half (Closed)
             Register(CreateUniformBlock(BlockType.DoorUpper, "Wooden Door", isSolid: true, isTransparent: true, hardness: 1.5f, new Vector2(1, 5), meshType: MeshType.DoorClosed));
-            // Lower Half (Open)
             Register(CreateUniformBlock(BlockType.DoorLowerOpen, "Wooden Door", isSolid: false, isTransparent: true, hardness: 1.5f, new Vector2(1, 6), meshType: MeshType.DoorOpen));
-            // Upper Half (Open)
             Register(CreateUniformBlock(BlockType.DoorUpperOpen, "Wooden Door", isSolid: false, isTransparent: true, hardness: 1.5f, new Vector2(1, 5), meshType: MeshType.DoorOpen));
 
-            // 2b. Iron Door
-            // Lower Half (Closed)
             Register(CreateUniformBlock(BlockType.IronDoorLower, "Iron Door", isSolid: true, isTransparent: true, hardness: 5.0f, new Vector2(2, 6), meshType: MeshType.DoorClosed));
-            // Upper Half (Closed)
             Register(CreateUniformBlock(BlockType.IronDoorUpper, "Iron Door", isSolid: true, isTransparent: true, hardness: 5.0f, new Vector2(2, 5), meshType: MeshType.DoorClosed));
-            // Lower Half (Open)
             Register(CreateUniformBlock(BlockType.IronDoorLowerOpen, "Iron Door", isSolid: false, isTransparent: true, hardness: 5.0f, new Vector2(2, 6), meshType: MeshType.DoorOpen));
-            // Upper Half (Open)
             Register(CreateUniformBlock(BlockType.IronDoorUpperOpen, "Iron Door", isSolid: false, isTransparent: true, hardness: 5.0f, new Vector2(2, 5), meshType: MeshType.DoorOpen));
 
-            // 3. Lever
             Register(CreateUniformBlock(BlockType.Lever, "Lever", isSolid: false, isTransparent: true, hardness: 0.5f, new Vector2(0, 6), meshType: MeshType.SwitchLever));
             Register(CreateUniformBlock(BlockType.LeverOn, "Lever (Active)", isSolid: false, isTransparent: true, hardness: 0.5f, new Vector2(0, 6), tintColor: new Vector3(1.4f, 0.4f, 0.3f), meshType: MeshType.SwitchLever));
 
-            // 4. Stone Button
             Register(CreateUniformBlock(BlockType.StoneButton, "Stone Button", isSolid: false, isTransparent: true, hardness: 0.5f, new Vector2(1, 0), meshType: MeshType.WallButton));
             Register(CreateUniformBlock(BlockType.StoneButtonPressed, "Stone Button (Pressed)", isSolid: false, isTransparent: true, hardness: 0.5f, new Vector2(1, 0), tintColor: new Vector3(1.3f, 0.4f, 0.3f), meshType: MeshType.WallButton));
 
-            // 5. Rails
             Register(CreateUniformBlock(BlockType.Rail, "Rail", isSolid: false, isTransparent: true, hardness: 0.7f, new Vector2(0, 8), meshType: MeshType.FlatSurface));
             Register(CreateUniformBlock(BlockType.PoweredRail, "Powered Rail", isSolid: false, isTransparent: true, hardness: 0.7f, new Vector2(0, 8), meshType: MeshType.FlatSurface));
             Register(CreateUniformBlock(BlockType.PoweredRailOn, "Powered Rail (Active)", isSolid: false, isTransparent: true, hardness: 0.7f, new Vector2(0, 8), tintColor: new Vector3(1.4f, 0.4f, 0.3f), meshType: MeshType.FlatSurface));
 
-            // 6. Minecart Item (Icon with black-pink texture & metallic tint)
             Register(CreateUniformBlock(BlockType.MinecartItem, "Minecart", isSolid: false, isTransparent: true, hardness: 0f, new Vector2(6, 0)));
 
-            // 7. Nether Portal Block (Translucent, glowing purple endgame rift)
             Register(CreateUniformBlock(BlockType.Portal, "Nether Portal", isSolid: false, isTransparent: true, hardness: 0f, new Vector2(14, 12), tintColor: new Vector3(1.35f, 0.40f, 1.65f), isLightSource: true));
 
-            // 8. Bed (Foot top at (6,8), Head top at (7,8), Foot End (5,9), Foot Side (6,9), Head End (8,9), Head Side (7,9))
             Register(new BlockDefinition(
                 BlockType.BedFoot,
                 "Bed",
@@ -443,7 +426,6 @@ namespace VelmoraCraft.src.World
                 meshType: MeshType.Bed
             ));
 
-            // --- Ores & Minerals ---
             Register(CreateUniformBlock(BlockType.GoldOre, "Gold Ore", isSolid: true, isTransparent: false, hardness: 3.0f, new Vector2(0, 2)));
             Register(CreateUniformBlock(BlockType.DiamondOre, "Diamond Ore", isSolid: true, isTransparent: false, hardness: 3.5f, new Vector2(2, 3)));
             Register(CreateUniformBlock(BlockType.RedstoneOre, "Redstone Ore", isSolid: true, isTransparent: false, hardness: 3.0f, new Vector2(3, 3)));
@@ -453,7 +435,6 @@ namespace VelmoraCraft.src.World
             Register(CreateUniformBlock(BlockType.DiamondBlock, "Block of Diamond", isSolid: true, isTransparent: false, hardness: 5.0f, new Vector2(8, 1)));
             Register(CreateUniformBlock(BlockType.LapisBlock, "Lapis Lazuli Block", isSolid: true, isTransparent: false, hardness: 3.0f, new Vector2(0, 9)));
 
-            // --- Natural Terrain & Wood ---
             Register(CreateUniformBlock(BlockType.Gravel, "Gravel", isSolid: true, isTransparent: false, hardness: 0.6f, new Vector2(3, 1)));
             Register(CreateUniformBlock(BlockType.Clay, "Clay Block", isSolid: true, isTransparent: false, hardness: 0.6f, new Vector2(8, 4)));
             Register(CreateMultiFaceBlock(BlockType.Sandstone, "Sandstone", isSolid: true, isTransparent: false, hardness: 0.8f, top: new Vector2(0, 11), side: new Vector2(0, 12), bottom: new Vector2(0, 13)));
@@ -466,7 +447,6 @@ namespace VelmoraCraft.src.World
             Register(CreateMultiFaceBlock(BlockType.Cactus, "Cactus", isSolid: true, isTransparent: true, hardness: 0.4f, top: new Vector2(5, 4), side: new Vector2(6, 4), bottom: new Vector2(7, 4)));
             Register(CreateUniformBlock(BlockType.SugarCane, "Sugar Cane", isSolid: false, isTransparent: true, hardness: 0f, new Vector2(9, 4), meshType: MeshType.CrossQuad));
 
-            // --- Flora, Plants & Crops ---
             Register(CreateUniformBlock(BlockType.TallGrass, "Tall Grass", isSolid: false, isTransparent: true, hardness: 0f, new Vector2(13, 5), tintColor: new Vector3(0.85f, 1.0f, 0.85f), meshType: MeshType.CrossQuad));
             Register(CreateUniformBlock(BlockType.Rose, "Rose", isSolid: false, isTransparent: true, hardness: 0f, new Vector2(12, 0), meshType: MeshType.CrossQuad));
             Register(CreateUniformBlock(BlockType.Dandelion, "Dandelion", isSolid: false, isTransparent: true, hardness: 0f, new Vector2(13, 0), meshType: MeshType.CrossQuad));
@@ -477,7 +457,6 @@ namespace VelmoraCraft.src.World
             Register(CreateUniformBlock(BlockType.WheatSeeds, "Wheat Seeds", isSolid: false, isTransparent: true, hardness: 0f, new Vector2(8, 5)));
             Register(CreateMultiFaceBlock(BlockType.Farmland, "Farmland", isSolid: true, isTransparent: false, hardness: 0.6f, top: new Vector2(6, 5), side: new Vector2(2, 0), bottom: new Vector2(2, 0)));
 
-            // --- Construction & Building ---
             Register(CreateUniformBlock(BlockType.Bricks, "Bricks", isSolid: true, isTransparent: false, hardness: 2.0f, new Vector2(7, 0)));
             Register(CreateUniformBlock(BlockType.SmoothStone, "Smooth Stone", isSolid: true, isTransparent: false, hardness: 1.5f, new Vector2(6, 0)));
             Register(CreateMultiFaceBlock(BlockType.DoubleStoneSlab, "Double Stone Slab", isSolid: true, isTransparent: false, hardness: 2.0f, top: new Vector2(6, 0), side: new Vector2(5, 0), bottom: new Vector2(6, 0)));
@@ -488,12 +467,10 @@ namespace VelmoraCraft.src.World
             Register(CreateUniformBlock(BlockType.Trapdoor, "Trapdoor", isSolid: false, isTransparent: true, hardness: 1.5f, new Vector2(4, 5)));
             Register(CreateUniformBlock(BlockType.Cobweb, "Cobweb", isSolid: false, isTransparent: true, hardness: 4.0f, new Vector2(11, 0), meshType: MeshType.CrossQuad));
 
-            // --- Nether Blocks ---
             Register(CreateUniformBlock(BlockType.Netherrack, "Netherrack", isSolid: true, isTransparent: false, hardness: 0.4f, new Vector2(7, 6)));
             Register(CreateUniformBlock(BlockType.SoulSand, "Soul Sand", isSolid: true, isTransparent: false, hardness: 0.5f, new Vector2(8, 6)));
             Register(CreateUniformBlock(BlockType.Glowstone, "Glowstone", isSolid: true, isTransparent: false, hardness: 0.3f, new Vector2(9, 6), isLightSource: true));
 
-            // --- Redstone, Interactive & Food ---
             Register(CreateMultiFaceBlock(BlockType.TNT, "TNT", isSolid: true, isTransparent: false, hardness: 0f, top: new Vector2(9, 0), side: new Vector2(8, 0), bottom: new Vector2(10, 0)));
             Register(CreateUniformBlock(BlockType.MonsterSpawner, "Monster Spawner", isSolid: true, isTransparent: true, hardness: 5.0f, new Vector2(1, 4)));
             Register(CreateDirectionalBlock(BlockType.Dispenser, "Dispenser", isSolid: true, isTransparent: false, hardness: 3.5f, front: new Vector2(14, 2), side: new Vector2(13, 2), top: new Vector2(14, 3)));
@@ -506,7 +483,6 @@ namespace VelmoraCraft.src.World
             Register(CreateMultiFaceBlock(BlockType.Cake, "Cake", isSolid: true, isTransparent: true, hardness: 0.5f, top: new Vector2(9, 7), side: new Vector2(10, 1), bottom: new Vector2(12, 7)));
             Register(CreateUniformBlock(BlockType.Bread, "Bread", isSolid: false, isTransparent: true, hardness: 0f, new Vector2(8, 5), tintColor: new Vector3(1.35f, 0.95f, 0.50f)));
 
-            // --- 16 Wool Colors ---
             Register(CreateUniformBlock(BlockType.WhiteWool, "White Wool", isSolid: true, isTransparent: false, hardness: 0.8f, new Vector2(0, 4)));
             Register(CreateUniformBlock(BlockType.OrangeWool, "Orange Wool", isSolid: true, isTransparent: false, hardness: 0.8f, new Vector2(2, 14)));
             Register(CreateUniformBlock(BlockType.MagentaWool, "Magenta Wool", isSolid: true, isTransparent: false, hardness: 0.8f, new Vector2(2, 13)));

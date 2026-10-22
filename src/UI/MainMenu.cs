@@ -196,7 +196,6 @@ namespace VelmoraCraft.src.UI
 
             float startY = screenH * 0.46f;
 
-            // 1. PLAY (NEW GAME)
             float btn1Y = startY;
             if (mx >= btnX && mx <= btnX + btnW && my >= btn1Y && my <= btn1Y + btnH)
             {
@@ -205,7 +204,6 @@ namespace VelmoraCraft.src.UI
                 return;
             }
 
-            // 2. CONTINUE
             float btn2Y = btn1Y + btnH + 16f;
             if (mx >= btnX && mx <= btnX + btnW && my >= btn2Y && my <= btn2Y + btnH)
             {
@@ -216,7 +214,6 @@ namespace VelmoraCraft.src.UI
                 return;
             }
 
-            // 3. EXIT
             float btn3Y = btn2Y + btnH + 16f;
             if (mx >= btnX && mx <= btnX + btnW && my >= btn3Y && my <= btn3Y + btnH)
             {
@@ -232,7 +229,6 @@ namespace VelmoraCraft.src.UI
             float modalX = (screenW - modalW) * 0.5f;
             float modalY = (screenH - modalH) * 0.5f;
 
-            // 1. Seed Input Box click
             float seedX = modalX + 35f;
             float seedY = modalY + 105f;
             float seedW = 265f;
@@ -245,7 +241,6 @@ namespace VelmoraCraft.src.UI
                 return;
             }
 
-            // 2. Randomize Seed button click
             float randBtnW = 140f;
             float randBtnH = 36f;
             float randBtnX = modalX + modalW - randBtnW - 35f;
@@ -257,7 +252,6 @@ namespace VelmoraCraft.src.UI
                 return;
             }
 
-            // 3. World Size Input Box click
             float sizeX = modalX + 35f;
             float sizeY = modalY + 175f;
             float sizeW = 140f;
@@ -270,7 +264,6 @@ namespace VelmoraCraft.src.UI
                 return;
             }
 
-            // 4. Quick preset buttons for chunk size: 32, 64, 256
             float preBtnW = 65f;
             float preBtnH = 36f;
             float preBtn32X = sizeX + sizeW + 20f;
@@ -299,7 +292,6 @@ namespace VelmoraCraft.src.UI
                 }
             }
 
-            // 5. Action Buttons at bottom of modal
             float actBtnW = 195f;
             float actBtnH = 42f;
             float actBtnY = modalY + modalH - actBtnH - 24f;
@@ -401,15 +393,12 @@ namespace VelmoraCraft.src.UI
 
             float startY = screenH * 0.46f;
 
-            // 1. PLAY (NEW GAME)
             float btn1Y = startY;
             RenderButton("PLAY (NEW GAME)", btnX, btn1Y, btnW, btnH, mousePos, isPrimary: true);
 
-            // 2. CONTINUE
             float btn2Y = btn1Y + btnH + 16f;
             RenderButton("CONTINUE", btnX, btn2Y, btnW, btnH, mousePos, isEnabled: HasActiveWorld);
 
-            // 3. EXIT
             float btn3Y = btn2Y + btnH + 16f;
             RenderButton("EXIT", btnX, btn3Y, btnW, btnH, mousePos, isDestructive: true);
         }
@@ -501,9 +490,6 @@ namespace VelmoraCraft.src.UI
             // Divider
             renderer.DrawQuad(modalX + 25f, modalY + 68f, modalW - 50f, 1.5f, new Vector4(0.25f, 0.30f, 0.40f, 0.7f));
 
-            // -------------------------------------------------------------
-            // ROW 1: World Seed
-            // -------------------------------------------------------------
             string seedLabel = "Enter World Seed:";
             renderer.DrawText(seedLabel, modalX + 35f, modalY + 82f, 1.15f, new Vector4(0.9f, 0.92f, 0.98f, 0.95f));
 
@@ -526,9 +512,6 @@ namespace VelmoraCraft.src.UI
             float randBtnY = seedBoxY;
             RenderButton("RANDOM", randBtnX, randBtnY, randBtnW, randBtnH, mousePos);
 
-            // -------------------------------------------------------------
-            // ROW 2: World Size (below the seed)
-            // -------------------------------------------------------------
             string sizeLabel = "World Size (in chunks):";
             renderer.DrawText(sizeLabel, modalX + 35f, modalY + 155f, 1.15f, new Vector4(0.9f, 0.92f, 0.98f, 0.95f));
 
@@ -568,9 +551,6 @@ namespace VelmoraCraft.src.UI
             // Divider before action buttons
             renderer.DrawQuad(modalX + 25f, modalY + 276f, modalW - 50f, 1.5f, new Vector4(0.25f, 0.30f, 0.40f, 0.7f));
 
-            // -------------------------------------------------------------
-            // Action Buttons
-            // -------------------------------------------------------------
             float actBtnW = 195f;
             float actBtnH = 42f;
             float actBtnY = modalY + modalH - actBtnH - 24f;

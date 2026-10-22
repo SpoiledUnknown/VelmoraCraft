@@ -529,7 +529,7 @@ namespace VelmoraCraft
             GL.ClearColor(skyColor.X, skyColor.Y, skyColor.Z, 1.0f);
             GL.Clear(ClearBufferMask.ColorBufferBit | ClearBufferMask.DepthBufferBit);
 
-            // 1. Render Sky Celestial Bodies (Sun, Moon, Stars) behind the terrain
+            // Render Sky Celestial Bodies (Sun, Moon, Stars) behind the terrain
             if (skyRenderer != null)
             {
                 GL.Disable(EnableCap.CullFace);
@@ -578,7 +578,7 @@ namespace VelmoraCraft
             // Dynamic Point Lights (Placed Torches, Lava, Handheld Torch, Redstone Torch, Lanterns, Glowstone)
             framePointLights.Clear();
 
-            // 1. Handheld dynamic point light when equipped/selected in hotbar
+            // Handheld dynamic point light when equipped/selected in hotbar
             if (currentScene == SceneState.InGame && player != null)
             {
                 BlockType held = player.SelectedPlacementBlock;
@@ -604,7 +604,7 @@ namespace VelmoraCraft
                 }
             }
 
-            // 2. Add placed world point lights up to max limit (16 total)
+            // Add placed world point lights up to max limit (16 total)
             int maxWorldLights = 16 - framePointLights.Count;
             if (world != null && maxWorldLights > 0)
             {
@@ -632,7 +632,7 @@ namespace VelmoraCraft
             // Render 3D World with true 3D frustum and distance culling
             world?.Render(shaderProgram, activeCam);
 
-            // 2. Render Dynamic Voxel Clouds overhead
+            // Render Dynamic Voxel Clouds overhead
             if (skyRenderer != null)
             {
                 GL.Disable(EnableCap.CullFace);

@@ -94,7 +94,6 @@ namespace VelmoraCraft.src.World
                 if (activeQueue.Count == 0) break;
                 var current = activeQueue.Dequeue();
 
-                // 1. Gravity: Try expanding straight DOWN first
                 int downY = current.Pos.Y - 1;
                 if (downY >= 1)
                 {
@@ -124,7 +123,6 @@ namespace VelmoraCraft.src.World
                     }
                 }
 
-                // 2. Lateral: Expand HORIZONTALLY in 4 cardinal directions up to 8 blocks
                 int nextDist = current.Distance + 1;
                 if (nextDist > MAX_FLOW_DISTANCE)
                 {

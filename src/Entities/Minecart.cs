@@ -251,7 +251,6 @@ namespace VelmoraCraft.src.Entities
                 vertexOffset += 4;
             }
 
-            // 1. Bottom Floor
             AddQuad(
                 new Vector3(-hw, 0.04f, -hl),
                 new Vector3(hw, 0.04f, -hl),
@@ -260,7 +259,6 @@ namespace VelmoraCraft.src.Entities
                 Vector3.UnitY
             );
 
-            // 2. Front Wall (+Z)
             AddQuad(
                 new Vector3(-hw, h, hl),
                 new Vector3(hw, h, hl),
@@ -269,7 +267,6 @@ namespace VelmoraCraft.src.Entities
                 Vector3.UnitZ
             );
 
-            // 3. Back Wall (-Z)
             AddQuad(
                 new Vector3(hw, h, -hl),
                 new Vector3(-hw, h, -hl),
@@ -278,7 +275,6 @@ namespace VelmoraCraft.src.Entities
                 -Vector3.UnitZ
             );
 
-            // 4. Left Wall (-X)
             AddQuad(
                 new Vector3(-hw, h, -hl),
                 new Vector3(-hw, h, hl),
@@ -287,7 +283,6 @@ namespace VelmoraCraft.src.Entities
                 -Vector3.UnitX
             );
 
-            // 5. Right Wall (+X)
             AddQuad(
                 new Vector3(hw, h, hl),
                 new Vector3(hw, h, -hl),

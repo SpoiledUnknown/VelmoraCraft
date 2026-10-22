@@ -324,13 +324,11 @@ namespace VelmoraCraft.src.World
 
         public static void ApplyLoadedData(SaveData data, World world, Player player, DayNightCycle? dayNight, ChestManager? chestManager, UIManager? uiManager = null, Action<bool>? setFullscreen = null)
         {
-            // 1. Restore Day/Night cycle
             if (dayNight != null)
             {
                 dayNight.TimeOfDay = data.TimeOfDay;
             }
 
-            // 2. Restore Modified Blocks FIRST so world geometry reflects all player builds/digs
             var modifiedChunks = new HashSet<Vector2i>();
             foreach (var b in data.ModifiedBlocks)
             {
@@ -388,7 +386,6 @@ namespace VelmoraCraft.src.World
                 }
             }
 
-            // 3. Restore Chests
             if (chestManager != null)
             {
                 chestManager.Clear();
@@ -406,7 +403,6 @@ namespace VelmoraCraft.src.World
                 }
             }
 
-            // 4. Restore Inventory
             player.Inventory.Clear();
             foreach (var slot in data.InventorySlots)
             {
@@ -416,7 +412,6 @@ namespace VelmoraCraft.src.World
                 }
             }
 
-            // 5. Restore Player position & rotation with robust ground detection
             float playerX = data.PlayerPosX;
             float playerZ = data.PlayerPosZ;
             float targetY = data.PlayerPosY;
@@ -488,7 +483,6 @@ namespace VelmoraCraft.src.World
             player.Health = (data.PlayerHealth > 0f) ? data.PlayerHealth : player.MaxHealth;
             player.Oxygen = (data.PlayerOxygen > 0f) ? data.PlayerOxygen : player.MaxOxygen;
 
-            // 6. Restore Settings (flight, fullscreen, hud, render distance, fov)
             if (uiManager != null)
             {
                 uiManager.IsHudEnabled = data.IsHudEnabled;

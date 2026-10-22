@@ -208,9 +208,6 @@ namespace VelmoraCraft.src.UI
             CurrentState = UIState.HUD;
         }
 
-        // ==========================================
-        // Update & Input Handling
-        // ==========================================
 
         public void Update(KeyboardState keyboard, MouseState mouse, Vector2 mousePosition, int screenWidth, int screenHeight, out bool cursorShouldBeGrabbed)
         {
@@ -342,7 +339,6 @@ namespace VelmoraCraft.src.UI
             float btnSpacing = 6f;
             float btnX = startX + (panelWidth - btnW) * 0.5f;
 
-            // 1. Resume Game
             float btn1Y = startY + 48f;
             if (leftClicked && mx >= btnX && mx <= btnX + btnW && my >= btn1Y && my <= btn1Y + btnH)
             {
@@ -350,7 +346,6 @@ namespace VelmoraCraft.src.UI
                 return;
             }
 
-            // 2. Save Game
             float btn2Y = btn1Y + btnH + btnSpacing;
             if (leftClicked && mx >= btnX && mx <= btnX + btnW && my >= btn2Y && my <= btn2Y + btnH)
             {
@@ -359,7 +354,6 @@ namespace VelmoraCraft.src.UI
                 return;
             }
 
-            // 3. Save & Main Menu
             float btn3Y = btn2Y + btnH + btnSpacing;
             if (leftClicked && mx >= btnX && mx <= btnX + btnW && my >= btn3Y && my <= btn3Y + btnH)
             {
@@ -369,7 +363,6 @@ namespace VelmoraCraft.src.UI
                 return;
             }
 
-            // 4. Toggle Fly Mode
             float btn4Y = btn3Y + btnH + btnSpacing;
             if (leftClicked && mx >= btnX && mx <= btnX + btnW && my >= btn4Y && my <= btn4Y + btnH)
             {
@@ -382,7 +375,6 @@ namespace VelmoraCraft.src.UI
                 return;
             }
 
-            // 5. Side-by-side toggles: Fullscreen and HUD
             float btn5Y = btn4Y + btnH + btnSpacing;
             float toggleGap = 8f;
             float toggleW = (btnW - toggleGap) * 0.5f;
@@ -403,7 +395,6 @@ namespace VelmoraCraft.src.UI
                 return;
             }
 
-            // 6. Render Distance Slider (2 to 16 chunks)
             float slider1Y = btn5Y + btnH + btnSpacing + 2f;
             float track1X = btnX;
             float track1Y = slider1Y + 16f;
@@ -431,7 +422,6 @@ namespace VelmoraCraft.src.UI
                 }
             }
 
-            // 7. FOV Slider (30 to 110 degrees)
             float slider2Y = track1Y + track1H + 8f;
             float track2X = btnX;
             float track2Y = slider2Y + 16f;
@@ -459,7 +449,6 @@ namespace VelmoraCraft.src.UI
                 }
             }
 
-            // 8. Quit to Desktop
             float btn6Y = track2Y + track2H + 12f;
             if (leftClicked && mx >= btnX && mx <= btnX + btnW && my >= btn6Y && my <= btn6Y + btnH)
             {
@@ -469,9 +458,6 @@ namespace VelmoraCraft.src.UI
             }
         }
 
-        // ==========================================
-        // Inventory & Crafting Screen Interactions
-        // ==========================================
 
         private void HandleInventoryAndCraftingClicks(float mx, float my, int screenW, int screenH, bool leftClicked, bool rightClicked, bool shiftHeld)
         {
@@ -487,7 +473,6 @@ namespace VelmoraCraft.src.UI
             float leftPanelX = startX;
             float rightPanelX = startX + panelWidth + gap;
 
-            // 1. Close Button [X] on Right Panel
             float closeX = rightPanelX + panelWidth - 26f;
             float closeY = startY + 8f;
             if (leftClicked && mx >= closeX && mx <= closeX + 18f && my >= closeY && my <= closeY + 18f)
@@ -496,7 +481,6 @@ namespace VelmoraCraft.src.UI
                 return;
             }
 
-            // 2. Crafting Category Tabs on Left Panel
             float tabY = startY + 36f;
             float tabH = 24f;
             float tabW = 90f;
@@ -517,7 +501,6 @@ namespace VelmoraCraft.src.UI
                 }
             }
 
-            // 3. Crafting Recipe Cards
             var recipes = GetFilteredRecipes();
             float recipeStartY = startY + 68f;
             float cardH = 44f;
@@ -544,7 +527,6 @@ namespace VelmoraCraft.src.UI
                 }
             }
 
-            // 4. Player Inventory Slots (Right Panel)
             float slotSize = 36f;
             float slotGap = 4f;
             float invStartX = rightPanelX + (panelWidth - (9 * slotSize + 8 * slotGap)) * 0.5f;
@@ -583,9 +565,6 @@ namespace VelmoraCraft.src.UI
             }
         }
 
-        // ==========================================
-        // Chest Screen Interactions
-        // ==========================================
 
         private void HandleChestClicks(float mx, float my, int screenW, int screenH, bool leftClicked, bool rightClicked, bool shiftHeld)
         {
@@ -610,7 +589,6 @@ namespace VelmoraCraft.src.UI
             float slotGap = 4f;
             float invStartX = startX + (panelWidth - (9 * slotSize + 8 * slotGap)) * 0.5f;
 
-            // 1. Chest Slots
             float chestStartY = startY + 40f;
             for (int row = 0; row < chestRows; row++)
             {
@@ -648,7 +626,6 @@ namespace VelmoraCraft.src.UI
                 }
             }
 
-            // 2. Player Inventory (Main 27 + Hotbar 9)
             float playerInvStartY = chestStartY + chestRows * (slotSize + slotGap) + 36f;
 
             // Main (slots 9 to 35)
@@ -862,9 +839,6 @@ namespace VelmoraCraft.src.UI
             return RecipeRegistry.Recipes;
         }
 
-        // ==========================================
-        // Rendering
-        // ==========================================
 
         public void Render(int screenWidth, int screenHeight, Vector2 mousePosition)
         {
@@ -928,7 +902,6 @@ namespace VelmoraCraft.src.UI
         {
             if (player == null) return;
 
-            // 1. Center Crosshair
             renderer.DrawCrosshair(screenW * 0.5f, screenH * 0.5f);
 
             // Coordinates & Direction Badge / F3 Debug Overlay (Top Left)
@@ -971,7 +944,6 @@ namespace VelmoraCraft.src.UI
 
             renderer.DrawText(cachedFpsString, fpsX, fpsY, fpsScale, fpsColor, shadow: true);
 
-            // 2. Block Breaking Progress Bar (if breaking a block)
             float slotSize = 42f;
             float slotGap = 4f;
             float totalHotbarW = 9 * slotSize + 8 * slotGap;
@@ -998,7 +970,6 @@ namespace VelmoraCraft.src.UI
                 renderer.DrawText("BREAKING...", barX + 24f, barY - 14f, 1.0f, new Vector4(0.9f, 0.9f, 0.9f, 0.9f));
             }
 
-            // 3. Hotbar at bottom center
             // Semi-transparent frosted glass panel behind hotbar
             renderer.DrawPanel(
                 hx - pad,
@@ -1021,8 +992,6 @@ namespace VelmoraCraft.src.UI
                 renderer.DrawText((i + 1).ToString(), sx + 3f, hy + 3f, 0.9f, new Vector4(0.65f, 0.70f, 0.80f, 0.85f), shadow: true);
             }
 
-            // 4. Status Sliders: Health and Oxygen (Always visible, side by side just above the hotbar)
-            // --- Health Slider (Left) ---
             float hpPct = Math.Clamp(player.Health / player.MaxHealth, 0f, 1f);
             Vector4 hpBg = new Vector4(0.18f, 0.05f, 0.05f, 0.85f);
             Vector4 hpFill = (hpPct > 0.30f)
@@ -1033,7 +1002,6 @@ namespace VelmoraCraft.src.UI
             string hpText = $"HP {(int)MathF.Ceiling(player.Health)}/{(int)player.MaxHealth}";
             renderer.DrawText(hpText, hx + 6f, sliderY + 2f, 0.85f, new Vector4(1f, 0.95f, 0.95f, 1f), shadow: true);
 
-            // --- Second Slider: Oxygen (Underwater) OR Sprint/Stamina (On Land) ---
             float secondBarX = hx + sliderW + sliderGap;
             if (player.IsUnderwater)
             {
@@ -1182,9 +1150,6 @@ namespace VelmoraCraft.src.UI
             Vector4 panelBg = new Vector4(0.12f, 0.13f, 0.16f, 0.92f);
             Vector4 panelBorder = new Vector4(0.28f, 0.32f, 0.40f, 0.80f);
 
-            // =========================
-            // Left Panel: Crafting List
-            // =========================
             renderer.DrawPanel(leftPanelX, startY, panelWidth, panelHeight, panelBg, panelBorder, 1.5f);
 
             string titleText = CurrentState switch
@@ -1272,9 +1237,6 @@ namespace VelmoraCraft.src.UI
                 }
             }
 
-            // =========================
-            // Right Panel: Inventory
-            // =========================
             renderer.DrawPanel(rightPanelX, startY, panelWidth, panelHeight, panelBg, panelBorder, 1.5f);
             renderer.DrawText("INVENTORY", rightPanelX + 14f, startY + 12f, 1.3f, new Vector4(0.95f, 0.95f, 1.0f, 1.0f));
 
@@ -1381,7 +1343,6 @@ namespace VelmoraCraft.src.UI
             float slotGap = 4f;
             float invStartX = startX + (panelWidth - (9 * slotSize + 8 * slotGap)) * 0.5f;
 
-            // 1. Chest Slots
             float chestStartY = startY + 40f;
             for (int row = 0; row < chestRows; row++)
             {
@@ -1409,7 +1370,6 @@ namespace VelmoraCraft.src.UI
             renderer.DrawQuad(invStartX, divY, (9 * slotSize + 8 * slotGap), 1.5f, new Vector4(0.3f, 0.35f, 0.45f, 0.5f));
             renderer.DrawText("PLAYER INVENTORY", invStartX, divY + 8f, 0.95f, new Vector4(0.85f, 0.88f, 0.95f, 0.9f));
 
-            // 2. Player Inventory (Main 27 slots)
             float playerInvStartY = divY + 24f;
             for (int row = 0; row < 3; row++)
             {

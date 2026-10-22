@@ -166,7 +166,6 @@ namespace VelmoraCraft.src.UI
 
             uint baseIdx = (uint)vertexCount;
 
-            // 0: Top-Left, 1: Top-Right, 2: Bottom-Right, 3: Bottom-Left
             vertices[vertexCount++] = new UIVertex(x, y, uv0.X, uv1.Y, color);
             vertices[vertexCount++] = new UIVertex(x + w, y, uv1.X, uv1.Y, color);
             vertices[vertexCount++] = new UIVertex(x + w, y + h, uv1.X, uv0.Y, color);
@@ -180,9 +179,6 @@ namespace VelmoraCraft.src.UI
             indices[indexCount++] = baseIdx + 0;
         }
 
-        // ==========================================
-        // Flat & Semi-Transparent Primitive Drawing
-        // ==========================================
 
         public void DrawQuad(float x, float y, float w, float h, Vector4 color)
         {
@@ -192,21 +188,15 @@ namespace VelmoraCraft.src.UI
 
         public void DrawBorder(float x, float y, float w, float h, float thickness, Vector4 color)
         {
-            // Top
             DrawQuad(x, y, w, thickness, color);
-            // Bottom
             DrawQuad(x, y + h - thickness, w, thickness, color);
-            // Left
             DrawQuad(x, y + thickness, thickness, h - 2 * thickness, color);
-            // Right
             DrawQuad(x + w - thickness, y + thickness, thickness, h - 2 * thickness, color);
         }
 
         public void DrawPanel(float x, float y, float w, float h, Vector4 bgColor, Vector4 borderColor, float borderWidth = 1.5f)
         {
-            // Panel Body
             DrawQuad(x, y, w, h, bgColor);
-            // Panel Border
             DrawBorder(x, y, w, h, borderWidth, borderColor);
         }
 
@@ -221,9 +211,6 @@ namespace VelmoraCraft.src.UI
             }
         }
 
-        // ==========================================
-        // Item & Atlas Textured Quad Drawing
-        // ==========================================
 
         public void DrawTexturedQuad(float x, float y, float w, float h, Vector2 uvMin, Vector2 uvMax, Vector4? tint = null)
         {
@@ -259,7 +246,6 @@ namespace VelmoraCraft.src.UI
 
         public void DrawSlot(float x, float y, float size, ItemStack stack, bool isSelected = false, bool isHovered = false)
         {
-            // Dark inset background with transparency
             Vector4 bg = isHovered 
                 ? new Vector4(0.22f, 0.24f, 0.28f, 0.90f) 
                 : new Vector4(0.12f, 0.13f, 0.16f, 0.85f);
@@ -282,13 +268,11 @@ namespace VelmoraCraft.src.UI
 
             DrawPanel(x, y, size, size, bg, border, bWidth);
 
-            // Item Icon
             if (!stack.IsEmpty)
             {
                 float padding = 4.0f;
                 DrawItemIcon(stack.Type, x + padding, y + padding, size - padding * 2.0f);
 
-                // Stack count number
                 if (stack.Count > 1)
                 {
                     string countStr = stack.Count.ToString();
@@ -301,9 +285,6 @@ namespace VelmoraCraft.src.UI
             }
         }
 
-        // ==========================================
-        // Text & Font Rendering
-        // ==========================================
 
         public void DrawText(string text, float x, float y, float scale = 1.0f, Vector4? color = null, bool shadow = true)
         {
@@ -311,7 +292,6 @@ namespace VelmoraCraft.src.UI
 
             Vector4 textColor = color ?? Vector4.One;
 
-            // Draw shadow for ultra-crisp visibility
             if (shadow)
             {
                 Vector4 shadowColor = new Vector4(0.05f, 0.05f, 0.05f, 0.85f);
@@ -351,22 +331,16 @@ namespace VelmoraCraft.src.UI
             return new Vector2(text.Length * 8f * scale, 8f * scale);
         }
 
-        // ==========================================
-        // Crosshair & Tooltips
-        // ==========================================
 
         public void DrawCrosshair(float centerX, float centerY, float size = 9f, float thickness = 2f)
         {
             Vector4 color = new Vector4(1.0f, 1.0f, 1.0f, 0.85f);
             Vector4 shadow = new Vector4(0.0f, 0.0f, 0.0f, 0.6f);
 
-            // Shadow
             DrawQuad(centerX - size - 1, centerY - thickness * 0.5f - 1, size * 2 + 2, thickness + 2, shadow);
             DrawQuad(centerX - thickness * 0.5f - 1, centerY - size - 1, thickness + 2, size * 2 + 2, shadow);
 
-            // Horizontal line
             DrawQuad(centerX - size, centerY - thickness * 0.5f, size * 2, thickness, color);
-            // Vertical line
             DrawQuad(centerX - thickness * 0.5f, centerY - size, thickness, size * 2, color);
         }
 
@@ -383,7 +357,6 @@ namespace VelmoraCraft.src.UI
             float x = mouseX + 12.0f;
             float y = mouseY + 12.0f;
 
-            // Screen boundary check
             if (x + w > screenWidth - 10) x = mouseX - w - 4.0f;
             if (y + h > screenHeight - 10) y = mouseY - h - 4.0f;
 

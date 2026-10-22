@@ -178,38 +178,32 @@ namespace VelmoraCraft.src.World
                     facing = chunk.GetMetadata(x, y, z);
                 }
 
-                // 1. Front (+Z)
                 if (ShouldRenderFace(chunk, frontChunk, x, y, z + 1, 0, 1, blockId))
                 {
                     AddFace(Face.Front, bx, by, bz, blockDef, builder, facing);
                 }
 
-                // 2. Back (-Z)
                 if (ShouldRenderFace(chunk, backChunk, x, y, z - 1, 0, -1, blockId))
                 {
                     AddFace(Face.Back, bx, by, bz, blockDef, builder, facing);
                 }
 
-                // 3. Left (-X)
                 if (ShouldRenderFace(chunk, leftChunk, x - 1, y, z, -1, 0, blockId))
                 {
                     AddFace(Face.Left, bx, by, bz, blockDef, builder, facing);
                 }
 
-                // 4. Right (+X)
                 if (ShouldRenderFace(chunk, rightChunk, x + 1, y, z, 1, 0, blockId))
                 {
                     AddFace(Face.Right, bx, by, bz, blockDef, builder, facing);
                 }
 
-                // 5. Top (+Y)
                 byte topBlock = y + 1 < Chunk.SIZE_Y ? chunk.GetBlock(x, y + 1, z) : (byte)BlockType.Empty;
                 if ((y + 1 >= Chunk.SIZE_Y || BlockRegistry.IsTransparent(topBlock)) && !(topBlock == blockId && (blockId == (byte)BlockType.Water || blockId == (byte)BlockType.Lava)))
                 {
                     AddFace(Face.Top, bx, by, bz, blockDef, builder, facing);
                 }
 
-                // 6. Bottom (-Y)
                 byte bottomBlock = y - 1 >= 0 ? chunk.GetBlock(x, y - 1, z) : (byte)BlockType.Empty;
                 if ((y - 1 < 0 || BlockRegistry.IsTransparent(bottomBlock)) && !(bottomBlock == blockId && (blockId == (byte)BlockType.Water || blockId == (byte)BlockType.Lava)))
                 {
@@ -511,38 +505,32 @@ namespace VelmoraCraft.src.World
                 }
             }
 
-            // 1. Front (+Z)
             if (ShouldRenderFace(chunk, frontChunk, x, y, z + 1, 0, 1, (byte)BlockType.Chest))
             {
                 AddFaceWithUV(Face.Front, bx, by, bz, uvFront, blockDef.TintColor, builder);
             }
 
-            // 2. Back (-Z)
             if (ShouldRenderFace(chunk, backChunk, x, y, z - 1, 0, -1, (byte)BlockType.Chest))
             {
                 AddFaceWithUV(Face.Back, bx, by, bz, uvBack, blockDef.TintColor, builder);
             }
 
-            // 3. Left (-X)
             if (ShouldRenderFace(chunk, leftChunk, x - 1, y, z, -1, 0, (byte)BlockType.Chest))
             {
                 AddFaceWithUV(Face.Left, bx, by, bz, uvLeft, blockDef.TintColor, builder);
             }
 
-            // 4. Right (+X)
             if (ShouldRenderFace(chunk, rightChunk, x + 1, y, z, 1, 0, (byte)BlockType.Chest))
             {
                 AddFaceWithUV(Face.Right, bx, by, bz, uvRight, blockDef.TintColor, builder);
             }
 
-            // 5. Top (+Y)
             byte topBlock = y + 1 < Chunk.SIZE_Y ? chunk.GetBlock(x, y + 1, z) : (byte)BlockType.Empty;
             if (y + 1 >= Chunk.SIZE_Y || BlockRegistry.IsTransparent(topBlock))
             {
                 AddFaceWithUV(Face.Top, bx, by, bz, uvTop, blockDef.TintColor, builder);
             }
 
-            // 6. Bottom (-Y)
             byte bottomBlock = y - 1 >= 0 ? chunk.GetBlock(x, y - 1, z) : (byte)BlockType.Empty;
             if (y - 1 < 0 || BlockRegistry.IsTransparent(bottomBlock))
             {
@@ -1087,10 +1075,8 @@ namespace VelmoraCraft.src.World
             Vector2 bottomCoord = new Vector2(4, 0); // Wooden planks bottom
             Vector3 tint = def.TintColor;
 
-            // 1. Top face (+Y)
             AddBedTopFace(x0, x1, y1, z0, z1, topCoord, tint, facing, builder);
 
-            // 2. Bottom face (-Y)
             float bu0 = bottomCoord.X / ATLAS_SIZE;
             float bu1 = (bottomCoord.X + 1f) / ATLAS_SIZE;
             float bv0 = 1.0f - ((bottomCoord.Y + 1f) / ATLAS_SIZE);
@@ -1134,7 +1120,6 @@ namespace VelmoraCraft.src.World
             Vector3 right2 = new Vector3(x1, y0, z0);
             Vector3 right3 = new Vector3(x1, y0, z1);
 
-            // 3. Side & End faces based on facing:
             // facing: 0 = South (+Z), 1 = North (-Z), 2 = West (-X), 3 = East (+X)
             if (facing == 0) // South: Head is +Z, Foot is -Z
             {

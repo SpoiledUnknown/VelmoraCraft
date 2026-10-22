@@ -123,7 +123,7 @@ namespace VelmoraCraft.src.World
 
             Vector2i spawnChunk = initialSpawnChunk ?? new Vector2i(WorldChunksX / 2, WorldChunksZ / 2);
 
-            // 1. Immediately generate 5x5 spawn chunks synchronously for instant ground collision and fluid/block safety
+            // Immediately generate 5x5 spawn chunks synchronously for instant ground collision and fluid/block safety
             for (int dx = -2; dx <= 2; dx++)
             {
                 for (int dz = -2; dz <= 2; dz++)
@@ -162,7 +162,7 @@ namespace VelmoraCraft.src.World
                 }
             }
 
-            // 2. Start background worker threads for generation and meshing
+            // Start background worker threads for generation and meshing
             int threadCount = Math.Max(2, Environment.ProcessorCount - 1);
             workerThreads = new Thread[threadCount];
             for (int i = 0; i < threadCount; i++)
@@ -587,7 +587,7 @@ namespace VelmoraCraft.src.World
 
                     var chunk = GetOrCreateChunk(coord);
 
-                    // 1. Generate terrain if needed
+            // Generate terrain if needed
                     if (!chunk.IsTerrainGenerated)
                     {
                         generator.GenerateChunkTerrain(chunk);
@@ -595,7 +595,7 @@ namespace VelmoraCraft.src.World
                         chunk.IsTerrainGenerated = true;
                     }
 
-                    // 2. Ensure 4 neighbor chunks exist and have terrain generated
+            // Ensure 4 neighbor chunks exist and have terrain generated
                     Vector2i leftCoord = new Vector2i(coord.X - 1, coord.Y);
                     Vector2i rightCoord = new Vector2i(coord.X + 1, coord.Y);
                     Vector2i frontCoord = new Vector2i(coord.X, coord.Y + 1);
@@ -631,7 +631,7 @@ namespace VelmoraCraft.src.World
                         backChunk.IsTerrainGenerated = true;
                     }
 
-                    // 3. Decorate chunk if needed
+            // Decorate chunk if needed
                     if (!chunk.IsDecorated)
                     {
                         generator.DecorateChunk(this, chunk);
@@ -641,7 +641,7 @@ namespace VelmoraCraft.src.World
                         ScanChunkLightSources(chunk);
                     }
 
-                    // 4. Build mesh with boundary edge culling
+            // Build mesh with boundary edge culling
                     ChunkMesh mesh = ChunkMesher.BuildMesh(chunk, leftChunk, rightChunk, frontChunk, backChunk);
                     readyToUploadMeshes.Enqueue((coord, mesh));
                 }
@@ -655,7 +655,7 @@ namespace VelmoraCraft.src.World
         // Called each frame on the main OpenGL thread to upload meshes to GPU and stream around view position
         public void Update(Vector3 viewPosition, float deltaTime = 0f, int maxUploadsPerFrame = 6)
         {
-            // 1. Upload ready meshes to GPU
+            // Upload ready meshes to GPU
             int uploaded = 0;
             while (uploaded < maxUploadsPerFrame && readyToUploadMeshes.TryDequeue(out var item))
             {
@@ -683,7 +683,7 @@ namespace VelmoraCraft.src.World
                 item.mesh.Dispose();
             }
 
-            // 2. Real-time chunk streaming around view position
+            // Real-time chunk streaming around view position
             streamTimer += deltaTime;
             int viewCX = (int)Math.Floor(viewPosition.X / Chunk.SIZE_X);
             int viewCZ = (int)Math.Floor(viewPosition.Z / Chunk.SIZE_Z);
@@ -696,7 +696,7 @@ namespace VelmoraCraft.src.World
                 StreamChunksAround(viewCX, viewCZ);
             }
 
-            // 3. Update Minecart entities
+            // Update Minecart entities
             while (pendingSpawnedMinecarts.TryDequeue(out var pendingCart))
             {
                 lock (Minecarts)
@@ -722,12 +722,12 @@ namespace VelmoraCraft.src.World
                 }
             }
 
-            // 4. Update fluid expansion simulation (water and lava)
+            // Update fluid expansion simulation (water and lava)
             if (deltaTime > 0f)
             {
                 FluidSystem.Update(this, deltaTime);
 
-                // 4b. Crop growth simulation (wheat grows through 7 stages to maturity in 3 to 4 in-game minutes)
+            // Crop growth simulation (wheat grows through 7 stages to maturity in 3 to 4 in-game minutes)
                 if (GrowingCrops.Count > 0)
                 {
                     cropGrowthTimer += deltaTime;
@@ -782,7 +782,7 @@ namespace VelmoraCraft.src.World
                     }
                 }
 
-                // 4c. Tree Sapling growth simulation (saplings grow into trees in 5 to 6 in-game minutes)
+            // Tree Sapling growth simulation (saplings grow into trees in 5 to 6 in-game minutes)
                 if (GrowingSaplings.Count > 0)
                 {
                     saplingGrowthTimer += deltaTime;
@@ -844,7 +844,7 @@ namespace VelmoraCraft.src.World
                     }
                 }
 
-                // 4d. Leaf Decay simulation (leaves with no trunk logs disappear after 1 to 2 in-game minutes)
+            // Leaf Decay simulation (leaves with no trunk logs disappear after 1 to 2 in-game minutes)
                 if (PendingDecayingLeaves.Count > 0)
                 {
                     leafDecayTimer += deltaTime;
@@ -886,7 +886,7 @@ namespace VelmoraCraft.src.World
                     }
                 }
 
-                // 4c. Dirt-to-grass spread simulation (dirt near grass turns into grass after 1-2 in-game days)
+            // Dirt-to-grass spread simulation (dirt near grass turns into grass after 1-2 in-game days)
                 if (PendingDirtGrassSpread.Count > 0)
                 {
                     dirtSpreadTimer += deltaTime;
@@ -924,7 +924,7 @@ namespace VelmoraCraft.src.World
                     }
                 }
 
-                // 4d. Cobweb spawning on trees at night
+            // Cobweb spawning on trees at night
                 if (DayNightCycle != null && (DayNightCycle.CurrentPhase == DayNightPhase.Night || DayNightCycle.CurrentPhase == DayNightPhase.Dusk))
                 {
                     cobwebSpawnTimer += deltaTime;
@@ -970,7 +970,7 @@ namespace VelmoraCraft.src.World
                 }
             }
 
-            // 5. Memory trim once the initial world generation burst settles
+            // Memory trim once the initial world generation burst settles
             if (!hasTrimmedStartupMemory && workQueue.IsEmpty && readyToUploadMeshes.IsEmpty && chunks.Count >= 25)
             {
                 hasTrimmedStartupMemory = true;

@@ -17,7 +17,6 @@ namespace VelmoraCraft.src.World
             {
                 int baseY = clickedPos.Y + dy;
 
-                // 1. Try X-Y plane (portal faces Z axis)
                 for (int dx = -2; dx <= 1; dx++)
                 {
                     int baseX = clickedPos.X + dx;
@@ -29,7 +28,6 @@ namespace VelmoraCraft.src.World
                     }
                 }
 
-                // 2. Try Z-Y plane (portal faces X axis)
                 for (int dz = -2; dz <= 1; dz++)
                 {
                     int baseX = clickedPos.X;

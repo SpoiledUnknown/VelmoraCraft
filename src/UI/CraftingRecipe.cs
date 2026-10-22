@@ -41,13 +41,11 @@ namespace VelmoraCraft.src.UI
         {
             if (!CanCraft(inventory)) return false;
 
-            // Consume ingredients
             foreach (var ing in Ingredients)
             {
                 inventory.ConsumeItem(ing.Type, ing.Count);
             }
 
-            // Add result
             return inventory.AddItem(Result.Type, Result.Count);
         }
     }
@@ -58,9 +56,6 @@ namespace VelmoraCraft.src.UI
 
         static RecipeRegistry()
         {
-            // ==========================================
-            // 1. Wood & Basic Survival Construction
-            // ==========================================
             Recipes.Add(new CraftingRecipe("Oak Planks (x4)", new ItemStack(BlockType.Planks, 4), new[] { (BlockType.Log, 1) }, RecipeStation.Personal));
             Recipes.Add(new CraftingRecipe("Birch Planks (x4)", new ItemStack(BlockType.Planks, 4), new[] { (BlockType.BirchLog, 1) }, RecipeStation.Personal));
             Recipes.Add(new CraftingRecipe("Spruce Planks (x4)", new ItemStack(BlockType.Planks, 4), new[] { (BlockType.SpruceLog, 1) }, RecipeStation.Personal));
@@ -83,9 +78,6 @@ namespace VelmoraCraft.src.UI
             Recipes.Add(new CraftingRecipe("Bed (Gray)", new ItemStack(BlockType.BedFoot, 1), new[] { (BlockType.GrayWool, 3), (BlockType.Planks, 3) }, RecipeStation.CraftingTable));
             Recipes.Add(new CraftingRecipe("Bookshelf", new ItemStack(BlockType.Bookshelf, 1), new[] { (BlockType.Planks, 6), (BlockType.SugarCane, 3) }, RecipeStation.CraftingTable));
 
-            // ==========================================
-            // 2. Mineral Blocks (Compression: Ore/Item -> Solid Block)
-            // ==========================================
             Recipes.Add(new CraftingRecipe("Block of Redstone", new ItemStack(BlockType.RedstoneBlock, 1), new[] { (BlockType.RedstoneOre, 9) }));
             Recipes.Add(new CraftingRecipe("Block of Coal", new ItemStack(BlockType.CoalBlock, 1), new[] { (BlockType.Coal, 9) }));
             Recipes.Add(new CraftingRecipe("Block of Iron", new ItemStack(BlockType.IronBlock, 1), new[] { (BlockType.IronIngot, 9) }));
@@ -93,9 +85,6 @@ namespace VelmoraCraft.src.UI
             Recipes.Add(new CraftingRecipe("Block of Diamond", new ItemStack(BlockType.DiamondBlock, 1), new[] { (BlockType.DiamondOre, 9) }));
             Recipes.Add(new CraftingRecipe("Block of Lapis", new ItemStack(BlockType.LapisBlock, 1), new[] { (BlockType.LapisOre, 9) }));
 
-            // ==========================================
-            // 3. Mineral Decompression (Solid Block -> Ore/Item)
-            // ==========================================
             Recipes.Add(new CraftingRecipe("Redstone from Block", new ItemStack(BlockType.RedstoneOre, 9), new[] { (BlockType.RedstoneBlock, 1) }));
             Recipes.Add(new CraftingRecipe("Coal from Block", new ItemStack(BlockType.Coal, 9), new[] { (BlockType.CoalBlock, 1) }));
             Recipes.Add(new CraftingRecipe("Iron Ingots from Block", new ItemStack(BlockType.IronIngot, 9), new[] { (BlockType.IronBlock, 1) }));
@@ -103,18 +92,12 @@ namespace VelmoraCraft.src.UI
             Recipes.Add(new CraftingRecipe("Diamond Ore from Block", new ItemStack(BlockType.DiamondOre, 9), new[] { (BlockType.DiamondBlock, 1) }));
             Recipes.Add(new CraftingRecipe("Lapis Ore from Block", new ItemStack(BlockType.LapisOre, 9), new[] { (BlockType.LapisBlock, 1) }));
 
-            // ==========================================
-            // 4. Terrain, Masonry & Construction
-            // ==========================================
             Recipes.Add(new CraftingRecipe("Sandstone", new ItemStack(BlockType.Sandstone, 1), new[] { (BlockType.Sand, 4) }, RecipeStation.Personal));
             Recipes.Add(new CraftingRecipe("Stone Slab (x3)", new ItemStack(BlockType.DoubleStoneSlab, 3), new[] { (BlockType.Stone, 3) }, RecipeStation.CraftingTable));
             Recipes.Add(new CraftingRecipe("Mossy Cobblestone", new ItemStack(BlockType.MossyCobblestone, 1), new[] { (BlockType.Cobblestone, 1), (BlockType.Leaves, 1) }, RecipeStation.CraftingTable));
             Recipes.Add(new CraftingRecipe("Snow Block", new ItemStack(BlockType.SnowBlock, 1), new[] { (BlockType.Ice, 4) }, RecipeStation.Personal));
             Recipes.Add(new CraftingRecipe("Farmland", new ItemStack(BlockType.Farmland, 1), new[] { (BlockType.Dirt, 1), (BlockType.Wheat, 1) }, RecipeStation.CraftingTable));
 
-            // ==========================================
-            // 5. Redstone, Transport & Explosives
-            // ==========================================
             Recipes.Add(new CraftingRecipe("Torches (x4)", new ItemStack(BlockType.Torch, 4), new[] { (BlockType.Coal, 1), (BlockType.Planks, 1) }, RecipeStation.Personal));
             Recipes.Add(new CraftingRecipe("Redstone Torch (x4)", new ItemStack(BlockType.RedstoneTorch, 4), new[] { (BlockType.RedstoneOre, 1), (BlockType.Planks, 1) }, RecipeStation.CraftingTable));
             Recipes.Add(new CraftingRecipe("Lever", new ItemStack(BlockType.Lever, 1), new[] { (BlockType.Cobblestone, 1), (BlockType.Planks, 1) }, RecipeStation.Personal));
@@ -133,9 +116,6 @@ namespace VelmoraCraft.src.UI
             Recipes.Add(new CraftingRecipe("Cake", new ItemStack(BlockType.Cake, 1), new[] { (BlockType.Bread, 3) }, RecipeStation.CraftingTable));
             Recipes.Add(new CraftingRecipe("Flint & Steel", new ItemStack(BlockType.FlintAndSteel, 1), new[] { (BlockType.IronIngot, 1), (BlockType.Cobblestone, 1) }, RecipeStation.CraftingTable));
 
-            // ==========================================
-            // 6. Wool Production & 16 Dyeing Recipes
-            // ==========================================
             Recipes.Add(new CraftingRecipe("White Wool from Wheat", new ItemStack(BlockType.WhiteWool, 1), new[] { (BlockType.Wheat, 4) }, RecipeStation.Personal));
             Recipes.Add(new CraftingRecipe("Cobweb from Tall Grass", new ItemStack(BlockType.Cobweb, 1), new[] { (BlockType.TallGrass, 2) }, RecipeStation.Personal));
             Recipes.Add(new CraftingRecipe("White Wool", new ItemStack(BlockType.WhiteWool, 1), new[] { (BlockType.Cobweb, 1) }, RecipeStation.Personal));
@@ -158,9 +138,6 @@ namespace VelmoraCraft.src.UI
             Recipes.Add(new CraftingRecipe("Gray Wool (x2)", new ItemStack(BlockType.GrayWool, 2), new[] { (BlockType.WhiteWool, 1), (BlockType.BlackWool, 1) }));
             Recipes.Add(new CraftingRecipe("Light Gray Wool (x2)", new ItemStack(BlockType.LightGrayWool, 2), new[] { (BlockType.WhiteWool, 1), (BlockType.GrayWool, 1) }));
 
-            // ==========================================
-            // 7. Smelting & Furnace Recipes
-            // ==========================================
             Recipes.Add(new CraftingRecipe("Smelt Iron Ingot", new ItemStack(BlockType.IronIngot, 1), new[] { (BlockType.IronOre, 1), (BlockType.Coal, 1) }, isSmelting: true));
             Recipes.Add(new CraftingRecipe("Smelt Glass", new ItemStack(BlockType.Glass, 1), new[] { (BlockType.Sand, 1), (BlockType.Coal, 1) }, isSmelting: true));
             Recipes.Add(new CraftingRecipe("Smelt Stone", new ItemStack(BlockType.Stone, 1), new[] { (BlockType.Cobblestone, 1), (BlockType.Coal, 1) }, isSmelting: true));
