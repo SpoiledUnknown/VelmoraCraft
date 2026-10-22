@@ -45,7 +45,7 @@ open the project in **Visual Studio**, **Rider**, or another C# IDE and run it n
 ### Controls
 
 | Key          | Action        |
-| ------------ | ------------- |
+|--------------|---------------|
 | `W A S D`    | Move          |
 | `Space`      | Move up       |
 | `Left Shift` | Move down     |
@@ -82,14 +82,17 @@ VelmoraCraft/
 
 Mostly to learn.
 
-I wanted to understand what actually happens underneath a game engine when rendering a 3D world — things like shaders, buffers, textures, cameras, transformations and voxel meshes.
+I wanted to understand what actually happens underneath a game engine when rendering a 3D world — things like shaders,
+buffers, textures, cameras, transformations and voxel meshes.
 
 OpenTK is a good fit for this because it provides low-level access to OpenGL without being a game engine itself.
 
-For learning OpenGL with C#, the official [LearnOpenTK tutorials](https://opentk.net/learn/index.html) were also useful for understanding the basics of windows, buffers, shaders, textures, transformations and cameras.
+For learning OpenGL with C#, the official [LearnOpenTK tutorials](https://opentk.net/learn/index.html) were also useful
+for understanding the basics of windows, buffers, shaders, textures, transformations and cameras.
 
 ## Note
 
 This is **not intended to be a Minecraft recreation** or a production-ready engine.
 
-It's just a personal project that I'm building incrementally while learning OpenGL and experimenting with voxel rendering.
+It's just a personal project that I'm building incrementally while learning OpenGL and experimenting with voxel
+rendering.

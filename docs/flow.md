@@ -1,6 +1,8 @@
 # VelmoraCraft — System Execution & Architectural Flow
 
-This document details the complete end-to-end execution flow of the VelmoraCraft engine, tracing every lifecycle stage from process launch, scene state transitions, multithreaded terrain generation, and living ecosystem simulation, to multi-pass rendering, input handling, and shutdown.
+This document details the complete end-to-end execution flow of the VelmoraCraft engine, tracing every lifecycle stage
+from process launch, scene state transitions, multithreaded terrain generation, and living ecosystem simulation, to
+multi-pass rendering, input handling, and shutdown.
 
 ---
 
@@ -34,29 +36,34 @@ flowchart TD
 ## 2. Program Startup & Scene Flow
 
 1. **Entrypoint (`Program.cs`)**:
-   * Creates the `Game` window configuration (native resolution, title: *VelmoraCraft*, OpenGL 3.3 Core profile).
-   * Launches `game.Run()`.
+    * Creates the `Game` window configuration (native resolution, title: *VelmoraCraft*, OpenGL 3.3 Core profile).
+    * Launches `game.Run()`.
 
 2. **Initialization (`Game.OnLoad`)**:
-   * **OpenGL Configuration**: Enables depth testing (`GL.Enable(EnableCap.DepthTest)`), backface culling, and alpha blending.
-   * **Audio (`AudioManager`)**: Initializes OpenAL device, listener, sound effect buffer cache, and starts background music playback.
-   * **Custom UI Subsystem (`UIRenderer` & `FontRenderer`)**:
-     * Instantiates the OpenGL 2D batch renderer and bitmap font glyph cache.
-     * Sets up `UIManager` (HUD, pause menu, inventory, chest, furnace, crafting stations).
-   * **Settings Restoration (`SaveSystem.LoadSettings`)**:
-     * Reads `saves/options.json` and restores WindowState (fullscreen), HUD visibility, View Distance, and FOV.
-   * **Graphics Assets**:
-     * Compiles shader programs (`Default.vert`, `Default.frag`, `Sky.vert`, `Sky.frag`).
-     * Loads the 256-block texture atlas with mipmapping and nearest-neighbor filtering.
-   * **Scene Initialization**:
-     * Creates a scenic 64-chunk 3D world locked at Dawn lighting (45s).
-     * Sets `menuCamera` in an orbit looking over the landscape.
-     * Sets `currentScene = SceneState.MainMenu` with active mouse cursor.
+    * **OpenGL Configuration**: Enables depth testing (`GL.Enable(EnableCap.DepthTest)`), backface culling, and alpha
+      blending.
+    * **Audio (`AudioManager`)**: Initializes OpenAL device, listener, sound effect buffer cache, and starts background
+      music playback.
+    * **Custom UI Subsystem (`UIRenderer` & `FontRenderer`)**:
+        * Instantiates the OpenGL 2D batch renderer and bitmap font glyph cache.
+        * Sets up `UIManager` (HUD, pause menu, inventory, chest, furnace, crafting stations).
+    * **Settings Restoration (`SaveSystem.LoadSettings`)**:
+        * Reads `saves/options.json` and restores WindowState (fullscreen), HUD visibility, View Distance, and FOV.
+    * **Graphics Assets**:
+        * Compiles shader programs (`Default.vert`, `Default.frag`, `Sky.vert`, `Sky.frag`).
+        * Loads the 256-block texture atlas with mipmapping and nearest-neighbor filtering.
+    * **Scene Initialization**:
+        * Creates a scenic 64-chunk 3D world locked at Dawn lighting (45s).
+        * Sets `menuCamera` in an orbit looking over the landscape.
+        * Sets `currentScene = SceneState.MainMenu` with active mouse cursor.
 
 3. **Game Transitions**:
-   * **Start New Game**: Destroys scenic world, creates clean world with chosen seed/size, sets player spawn atop terrain, and enters `SceneState.InGame` with grabbed mouse cursor.
-   * **Continue Game**: Loads `SaveData` via `SaveSystem.LoadSaveData()`, reinstates player position, health, inventory, chests, modified blocks, and settings.
-   * **Nether Portal Entry**: Triggers `SceneState.VictoryScreen`, breaks nearby portal blocks to prevent infinite reload loops, and offers "Continue Playing" or "Save & Main Menu".
+    * **Start New Game**: Destroys scenic world, creates clean world with chosen seed/size, sets player spawn atop
+      terrain, and enters `SceneState.InGame` with grabbed mouse cursor.
+    * **Continue Game**: Loads `SaveData` via `SaveSystem.LoadSaveData()`, reinstates player position, health,
+      inventory, chests, modified blocks, and settings.
+    * **Nether Portal Entry**: Triggers `SceneState.VictoryScreen`, breaks nearby portal blocks to prevent infinite
+      reload loops, and offers "Continue Playing" or "Save & Main Menu".
 
 ---
 
@@ -80,6 +87,7 @@ flowchart TD
 ```
 
 ### Worker Lifecycle State Diagram:
+
 ```mermaid
 stateDiagram-v2
     [*] --> Queued: Player moves near ungenerated chunk
@@ -95,21 +103,22 @@ stateDiagram-v2
 ```
 
 1. **Streaming Check (`World.StreamChunksAround`)**:
-   * Evaluates chunks within `ViewDistanceChunks` (2 to 16 chunks radius).
-   * Sorts candidate chunks by distance squared to prioritize nearest chunks.
-   * Enqueues up to 32 chunks per batch into `workQueue`, marking `IsGeneratingMesh = true`.
+    * Evaluates chunks within `ViewDistanceChunks` (2 to 16 chunks radius).
+    * Sorts candidate chunks by distance squared to prioritize nearest chunks.
+    * Enqueues up to 32 chunks per batch into `workQueue`, marking `IsGeneratingMesh = true`.
 2. **Worker Threads (`World.WorkerLoop`)**:
-   * Dequeue chunk coordinate from `workQueue`.
-   * Throttles execution if `readyToUploadMeshes.Count >= 24` to prevent memory backlogs.
-   * Generate 3D noise terrain for center and adjacent 4 neighbor chunks.
-   * Apply decorations (ores, trees, flora) and structures (villages, railways, desert wells, camps, ruins, mineshafts). Newly spawned entities like minecarts are queued to `pendingSpawnedMinecarts`.
-   * Execute `ChunkMesher.BuildMesh()` renting arrays from `ArrayPool<T>.Shared`.
-   * Push completed `ChunkMesh` to `readyToUploadMeshes` concurrent queue.
+    * Dequeue chunk coordinate from `workQueue`.
+    * Throttles execution if `readyToUploadMeshes.Count >= 24` to prevent memory backlogs.
+    * Generate 3D noise terrain for center and adjacent 4 neighbor chunks.
+    * Apply decorations (ores, trees, flora) and structures (villages, railways, desert wells, camps, ruins,
+      mineshafts). Newly spawned entities like minecarts are queued to `pendingSpawnedMinecarts`.
+    * Execute `ChunkMesher.BuildMesh()` renting arrays from `ArrayPool<T>.Shared`.
+    * Push completed `ChunkMesh` to `readyToUploadMeshes` concurrent queue.
 3. **Main Thread GPU Upload (`World.Update`)**:
-   * Dequeues up to `maxUploadsPerFrame` (6) meshes.
-   * Creates/updates single interleaved VBO and VAO on the active OpenGL context.
-   * Disposes `item.mesh`, returning rented arrays to `ArrayPool`.
-   * Frees GPU memory for distant chunks beyond view radius.
+    * Dequeues up to `maxUploadsPerFrame` (6) meshes.
+    * Creates/updates single interleaved VBO and VAO on the active OpenGL context.
+    * Disposes `item.mesh`, returning rented arrays to `ArrayPool`.
+    * Frees GPU memory for distant chunks beyond view radius.
 
 ---
 
@@ -168,28 +177,31 @@ flowchart TD
 ```
 
 ### Detailed Render Passes:
+
 1. **Pass 0: Skybox (`SkyRenderer.Render`)**:
-   * Renders celestial hemisphere with dynamic sun, moon, stars, and procedural moving clouds.
-   * Updates atmospheric sky tint and distance fog parameters according to current render distance and time of day.
+    * Renders celestial hemisphere with dynamic sun, moon, stars, and procedural moving clouds.
+    * Updates atmospheric sky tint and distance fog parameters according to current render distance and time of day.
 2. **Pass 1: Opaque Terrain (`World.Render` - Pass 1)**:
-   * Sets `isTranslucentPass = 0`, `DepthMask = true`, `Blend = false`.
-   * Frustum-culls chunks outside camera field of view.
-   * Queries active point lights (up to 15) within 48 blocks and uploads them to shader uniform arrays.
-   * Draws opaque geometry (stone, dirt, wood, leaves, directional doors, etc.).
-   * Solid surfaces under water are written to depth buffer first.
+    * Sets `isTranslucentPass = 0`, `DepthMask = true`, `Blend = false`.
+    * Frustum-culls chunks outside camera field of view.
+    * Queries active point lights (up to 15) within 48 blocks and uploads them to shader uniform arrays.
+    * Draws opaque geometry (stone, dirt, wood, leaves, directional doors, etc.).
+    * Solid surfaces under water are written to depth buffer first.
 3. **Pass 2: Translucent Surfaces (`World.Render` - Pass 2)**:
-   * Sets `isTranslucentPass = 1`, `DepthMask = false`, `Blend = true` (`GL.BlendFunc(SrcAlpha, OneMinusSrcAlpha)`).
-   * Renders water, ice, and portal quads smoothly blended over opaque geometry.
-   * Applies vertex wave displacement and texture frame animations in shader.
+    * Sets `isTranslucentPass = 1`, `DepthMask = false`, `Blend = true` (`GL.BlendFunc(SrcAlpha, OneMinusSrcAlpha)`).
+    * Renders water, ice, and portal quads smoothly blended over opaque geometry.
+    * Applies vertex wave displacement and texture frame animations in shader.
 4. **Pass 3: Entities (`MinecartRenderer.Render`)**:
-   * Renders active minecart models under thread-safe list lock with matching lighting and texture atlas.
+    * Renders active minecart models under thread-safe list lock with matching lighting and texture atlas.
 5. **Pass 4: User Interface (`UIManager.Render` & `UIRenderer`)**:
-   * Renders custom OpenGL 2D overlays:
-     * Interactive Health, Oxygen, Stamina, and Hotbar status indicators.
-     * Reticle crosshair and hand-held item rendering with bobbing animation.
-     * Compact HUD Coordinates Badge (always visible in top-left).
-     * Toggleable `F3` Debug Diagnostics screen with sub-block coordinates, chunk coordinates, facing direction, biome name, and engine metrics.
-     * Full interactive screens: Inventory (2x2), Crafting Table (3x3), Furnace (smelting), Chest / Double-Chest, Pause Menu with persistent sliders, and Victory Screen.
+    * Renders custom OpenGL 2D overlays:
+        * Interactive Health, Oxygen, Stamina, and Hotbar status indicators.
+        * Reticle crosshair and hand-held item rendering with bobbing animation.
+        * Compact HUD Coordinates Badge (always visible in top-left).
+        * Toggleable `F3` Debug Diagnostics screen with sub-block coordinates, chunk coordinates, facing direction,
+          biome name, and engine metrics.
+        * Full interactive screens: Inventory (2x2), Crafting Table (3x3), Furnace (smelting), Chest / Double-Chest,
+          Pause Menu with persistent sliders, and Victory Screen.
 
 ---
 
@@ -206,14 +218,17 @@ flowchart LR
     G --> H["Write atomic JSON to saves/world_{seed}.json"]
 ```
 
-* **Instant Restoration**: During world load, modified blocks are loaded into memory *before* chunks generate, ensuring user modifications appear on screen instantly without popping or delay.
-* **Delta Serialization**: Unmodified chunks remain purely procedural; only player-placed, broken, or modified blocks are saved, keeping save files tiny ($< 100\text{ KB}$).
+* **Instant Restoration**: During world load, modified blocks are loaded into memory *before* chunks generate, ensuring
+  user modifications appear on screen instantly without popping or delay.
+* **Delta Serialization**: Unmodified chunks remain purely procedural; only player-placed, broken, or modified blocks
+  are saved, keeping save files tiny ($< 100\text{ KB}$).
 
 ---
 
 ## 7. Shutdown & Disposal Flow
 
 When the window closes (`OnUnload` / `Dispose`):
+
 1. Background worker threads receive cancellation signals via `CancellationTokenSource` and are cleanly joined.
 2. `World.Destroy()` unloads and deletes all OpenGL VBOs and VAOs from GPU memory.
 3. Disposes any pending chunk meshes left in `readyToUploadMeshes` to return rented arrays to `ArrayPool`.
